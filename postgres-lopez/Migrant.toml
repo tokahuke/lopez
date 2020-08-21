@@ -1,0 +1,16 @@
+
+# Required, do not edit
+database_type = "postgres"
+
+# Required database info
+database_name = "__lopez_model"
+database_user = "silentpuma"
+database_password = "simha.sursum.fahren.eidon"
+
+# Configurable database info
+database_host = "localhost"
+database_port = "5432"
+migration_location = "migrations"
+
+# Extra database connection parameters
+[database_params]

@@ -1,0 +1,25 @@
+{
+    "name": "lopez-syntax-highlighting",
+    "displayName": "Lopez Syntax Highlighting",
+    "description": "Syntax highlighting for Lopez Crawl Directives",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.48.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "lopez-crawl-directives",
+            "aliases": ["Lopez Crawl Directives", "lopez-crawl-directives"],
+            "extensions": [".lcd"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "lopez-crawl-directives",
+            "scopeName": "source.lcd",
+            "path": "./syntaxes/lopez-crawl-directives.tmLanguage.plist"
+        }]
+    }
+}
