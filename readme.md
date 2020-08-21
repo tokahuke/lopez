@@ -5,7 +5,7 @@ Crawling the Web for fun and profit.
 
 ## Running the damn thing
 
-If you are running from the repository, you will need Rust Ecosystem, which is easy to install. Just go to [https://rust-lang.org/tools/install] and follow the instructions. After that, go the `lopez` folder and run:
+If you are running from the repository, you will need Rust Ecosystem, which is easy to install. Just go to https://rust-lang.org/tools/install and follow the instructions. After that, go the `lopez` folder and run:
 ``` bash
 cargo run --release -- --help
 ```
@@ -33,8 +33,16 @@ Let's brag a little!
 
 * The beast is _fast_, in comparison with other similar programs I have made in the past using the Python ecosystem (BeatufulSoup, asyncio, etc...). It's in Rust; what were you expecting?
 
-* It uses very little memory. Yes, if crawling is not done correctly, it can gobble up your memory and still ask for more. Using a database (PostgreSQL), all evil is averted!
+* It uses very little memory. If crawling is not done correctly, it can gobble up your memory and still ask for more. Using a database (PostgreSQL), all evil is averted!
 
-* It is polite. 
+* It is polite. Yes, it obeys `robots.txt` and no, you can't turn that off.
 
 ## Limitations and future plans
+
+* Lopez is still limited to a single machine. No distributed programming yet. However, what are you crawling that requires so much firepower?
+
+* This crate need more docs and more support for other backends. Sorry, I have a full-time job.
+
+## Licensing
+
+All the work in this repository is licensed under the Apache v2.0 license. See the `license` file for mode detailed information.
