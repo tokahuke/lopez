@@ -1,0 +1,245 @@
+#################################################################
+## Iro
+################################################################ 
+##
+## * Press Ctrl + '+'/'-' To Zoom in
+## * Press Ctrl + S to save and recalculate... 
+## * Documents are saved to web storage.
+## * Only one save slot supported.
+## * Matches cannot span lines.
+## * Unicode chars must be defined in \u0000 to \uffff format.
+## * All matches must be contained by a single group ( ... )
+## * Look behinds not permitted, (?<= or (?<!
+## * Look forwards are permitted (?= or (?!
+## * Constants are defined as __my_const = (......)
+## * The \= format allows unescaped regular expressions
+## * Constants referenced by match \= $${__my_const}
+## * Constants can reference other constants
+## * You are free to delete all the default scopes.
+## * Twitter : ainslec , Web: http://eeyo.io/iro
+##
+################################################################
+
+name                   = lcd
+file_extensions []     = lcd;
+
+################################################################
+## Constants
+################################################################
+
+// Blank
+
+################################################################
+## Styles
+################################################################
+
+styles [] {
+
+.comment : style {
+   color                 = light_green
+   // italic                = true
+   ace_scope             = comment
+   textmate_scope        = comment
+   pygments_scope        = Comment
+}
+
+.keyword : style {
+   color                 = violet
+   ace_scope             = keyword
+   textmate_scope        = keyword
+   pygments_scope        = Keyword
+}
+
+.ruleset_aggregator : style {
+   color                 = gold
+   ace_scope             = entity.name.function
+   textmate_scope        = entity.name.function
+   pygments_scope        = Name.Function
+}
+
+.ruleset_extractor : style {
+   color     = gold
+   ace_scope             = entity.name.function
+   textmate_scope        = entity.name.function
+   pygments_scope        = Name.Function
+}
+
+.rule_name : style {
+   color                 = cyan
+   ace_scope             = entity.other.attribute-name
+   textmate_scope        = entity.other.attribute-name
+   pygments_scope        = Name.Tag
+}
+
+.css_tag : style {
+   color                 = cyan
+   ace_scope             = entity.name.tag.css
+   textmate_scope        = entity.name.tag.css
+   pygments_scope        = Name.Tag
+}
+
+// .css_attribute : style {
+//    color                 = gold
+//    ace_scope             = entity.other.attribute-name
+//    textmate_scope        = entity.other.attribute-name
+//    pygments_scope        = Name
+// }
+
+.numeric : style {
+   color                 = gold
+   ace_scope             = constant.numeric
+   textmate_scope        = constant.numeric
+   pygments_scope        = Number
+}
+
+.punctuation : style {
+   color     = white
+   ace_scope             = punctuation
+   textmate_scope        = punctuation
+   pygments_scope        = Punctuation
+}
+
+.text : style {
+   color                 = brown
+   ace_scope             = string
+   textmate_scope        = string
+   pygments_scope        = String
+}
+
+.quotes : style {
+   color                 = brown
+   ace_scope             = string
+   textmate_scope        = string
+   pygments_scope        = String
+}
+
+.illegal : style {
+   color                 = white
+   background_color      = red
+   ace_scope             = invalid
+   textmate_scope        = invalid
+   pygments_scope        = Generic.Error
+}
+
+}
+
+#################################################
+## Parse contexts
+#################################################
+
+contexts [] {
+
+main : context {
+
+   : include "comment";
+   : include "keywords" ;
+   : include "string";
+   : include "numeric";
+   : include "punctuation";
+   
+   : inline_push {
+      regex          \= (\{)
+      styles []       = .punctuation;
+      : pop {  
+         regex       \= (\})
+         styles []    = .punctuation;
+      }
+      
+      : include "comment";
+      : include "string";
+      : include "punctuation";
+
+      : inline_push {
+         regex       \=  ([^\\/.:;\(\)\{\}\[\] ]+)\W*(:)
+         styles []    = .rule_name, .punctuation;
+         : pop {
+            regex       \= (;)
+            styles []    = .punctuation;
+         }
+         
+         : include "ruleset_namespace";
+         : include "comment";
+         : include "string";
+      }
+   }
+
+   
+   : inline_push {
+      regex          \= (in[ \t]*)
+      styles []       = .keyword;
+      default_style   = .text
+      : pop {
+         regex       \= ()
+         styles []    = .keyword;
+      }
+   }
+   
+   
+   : pattern {
+      regex          \= ([:~=><\$\^\[\]*|()])
+      styles []       = .punctuation;
+   }
+   
+   : pattern {
+      regex          \= ([#a-zA-Z0-9-_]+)
+      styles []       = .css_tag;
+   }
+   
+   : pattern {
+      regex       \=  ([^\s])
+      styles []    = .illegal;
+   }
+}
+
+comment : context {
+   : pattern {
+      regex       \= (//.*)
+      styles []    = .comment;
+   }
+}
+
+string : context {
+   : inline_push {
+      regex          \= (\")
+      styles []       = .quotes;
+      default_style   = .text
+      : pop {
+         regex       \= (\")
+         styles []    = .quotes;
+      }
+   }
+}
+
+punctuation: context {
+   : pattern {
+      regex          \= (;|:)
+      styles []       = .punctuation;
+   }
+}
+
+keywords : context {
+   : pattern {
+      regex \= (select(:?\W+in)?|import|allow|disallow|frontier|seed|use\W+param|ignore\W+param)
+      styles [] = .keyword; 
+   }
+}
+
+ruleset_namespace : context {
+   : pattern {
+      regex \= (first|collect|count)
+      styles[] = .ruleset_aggregator;
+   }
+   : pattern {
+      regex \= (name|text|capture|all-captures|html|inner-html|attr|hash)
+      styles[] = .ruleset_extractor;
+   }
+}
+
+numeric : context {
+   : pattern {
+      regex          \= (\b\d+)
+      styles []       = .numeric;
+   }
+}
+
+}

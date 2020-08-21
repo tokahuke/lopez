@@ -1,0 +1,12 @@
+[profile.release]
+debug = true
+# lto = "thin"
+
+[workspace]
+
+members = [
+    "lib-lopez",
+    "postgres-lopez",
+    "lopez",
+    "entalator",
+]

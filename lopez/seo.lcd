@@ -1,0 +1,32 @@
+
+select html {
+    page-hash: first hash;
+}
+
+select head title {
+    title: first text;
+    count-title: count;
+}
+
+select h1 {
+    h1: first text;
+    count-h1: count;
+}
+
+select link[rel="canonical"] {
+    count-canonical: count;
+}
+
+select meta[name="description"] {
+    meta-description: first attr "content";
+    count-meta-description: count;
+}
+
+select * {
+    // Counts all elements in DOM.
+    n-elements: count;
+}
+
+select img:not([alt]) {
+    missing-alt-text: collect attr "src";
+}

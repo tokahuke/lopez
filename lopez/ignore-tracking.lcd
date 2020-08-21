@@ -1,0 +1,11 @@
+
+// UTM parameters (used by Analytics and most of the web):
+ignore param "utm_source";
+ignore param "utm_medium";
+ignore param "utm_campaign";
+ignore param "utm_content";
+ignore param "utm_keyword";
+
+// Click ids:
+ignore param "gclid"; // From Google Ads
+ignore param "fbclid"; // From Facebok.
