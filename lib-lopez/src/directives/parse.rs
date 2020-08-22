@@ -348,7 +348,7 @@ fn flag_directive(directive_tags: &'static [&'static str]) -> impl Fn(&str) -> I
 
 #[test]
 fn flag_directive_test() {
-    assert_eq!(string_directive(&["foo"])("foo;"), Ok(("", ())));
+    assert_eq!(flag_directive(&["foo"])("foo;"), Ok(("", ())));
 }
 
 #[derive(Debug, Clone)]
@@ -390,7 +390,7 @@ fn rule_set(i: &str) -> IResult<&str, Result<RuleSet, String>> {
 
 #[test]
 fn rule_set_test() {
-    rule_set("td > a[href^=\"https\"] { foo: first text ; }")
+    rule_set("select td > a[href^=\"https\"] { foo: first text ; }")
         .unwrap()
         .1
         .unwrap();
@@ -524,7 +524,7 @@ fn item(i: &str) -> IResult<&str, Result<Item, String>> {
 
 #[test]
 fn item_test() {
-    item("td > a[href^=\"https\"] { foo: first text ; }")
+    item("select td > a[href^=\"https\"] { foo: first text ; }")
         .unwrap()
         .1
         .unwrap();
