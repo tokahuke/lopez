@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use tokio_postgres::{Client, Statement};
 
-use lib_lopez::backend::{Reason, StatusCode, Url, Value, WorkerBackend, async_trait};
+use lib_lopez::backend::{async_trait, Reason, StatusCode, Url, Value, WorkerBackend};
 use lib_lopez::hash;
 
 const ENSURE_LINKS: &str = include_str!("sql/ensure_links.sql");

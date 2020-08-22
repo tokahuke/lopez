@@ -1,4 +1,3 @@
-
 use failure_derive::Fail;
 
 #[derive(Fail, Debug)]

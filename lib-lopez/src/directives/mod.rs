@@ -103,7 +103,7 @@ impl Module {
 
     /// Loads a module and its dependencies into a set of modules.
     fn load<P: AsRef<Path>, Q: AsRef<Path>>(
-        root: P,
+        roots: &[P],
         module_name: String,
         modules: &mut BTreeMap<String, Module>,
         paths: &[Q],
@@ -119,21 +119,23 @@ impl Module {
                 let sub_module_name =
                     canonical_path(&(module_name.to_owned() + SEPARATOR + &module.path))?;
 
-                let file_path = root
-                    .as_ref()
-                    .to_owned()
-                    .join(sub_module_name.split(SEPARATOR).collect::<PathBuf>());
-                let folder_path = file_path.join(MODULE_FILE);
+                let paths = roots
+                    .iter()
+                    .flat_map(|root| {
+                        let file_path = root
+                            .as_ref()
+                            .to_owned()
+                            .join(sub_module_name.split(SEPARATOR).collect::<PathBuf>());
+                        let folder_path = file_path.join(MODULE_FILE);
 
-                Self::load(
-                    root.as_ref(),
-                    sub_module_name,
-                    modules,
-                    &[
-                        file_path.with_extension(EXTENSION),
-                        folder_path.with_extension(EXTENSION),
-                    ],
-                )?;
+                        vec![
+                            file_path.with_extension(EXTENSION),
+                            folder_path.with_extension(EXTENSION),
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+
+                Self::load(roots, sub_module_name, modules, &paths)?;
             }
         }
 
@@ -171,11 +173,16 @@ impl Directives {
     }
 
     /// Loads directives from a given file while also loading all dependencies.
-    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, String> {
+    pub fn load<P: AsRef<Path>, Q: AsRef<Path>>(path: P, imports: Q) -> Result<Self, String> {
         let parent = path.as_ref().parent().expect("cannot be root");
         let mut modules = BTreeMap::new();
 
-        Module::load(parent, "".to_owned(), &mut modules, &[path.as_ref()])?;
+        Module::load(
+            &[parent, imports.as_ref()],
+            "".to_owned(),
+            &mut modules,
+            &[path.as_ref()],
+        )?;
 
         let directives = Directives { modules };
 

@@ -1,9 +1,9 @@
 #[macro_use]
 mod db;
+mod error;
 mod master;
 mod ranker;
 mod worker;
-mod error;
 
 use std::sync::Arc;
 

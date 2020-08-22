@@ -11,37 +11,6 @@ homepage = "https://silentpuma.com/lopez"
 lib-lopez = { path = "../lib-lopez" }
 postgres-lopez = { path = "../postgres-lopez" }
 
-hyper-tls = "0.4.3"
-hyper = "0.13.7"
-reqwest = "0.10.7"
-scraper = "0.12.0"
-url = "2.1.1"
-http = "0.2.1"
-libflate = "1.0.2"
-robots_txt = "0.7.0"
-
-futures = "0.3.5"
-rayon = "1.3.1"
+# Still nees these two for macro expansion (irrgh! will fin a way to get rid of these).
 tokio = { version = "0.2.22", features = ["macros", "rt-core", "rt-util"] }
-
-tokio-postgres = { version = "0.5.5", features = ["with-serde_json-1"] }
-migrant_lib = { version = "0.29.0", features = ["d-postgres"] }
-
-serde = "1.0.115"
-serde_derive = "1.0.115"
-serde_json = "1.0.57"
-
-siphasher = "0.3.3"
-nom = "5.1.2"
-regex = "1.3.9"
-
-lazy_static = "1.4.0"
 structopt = "0.3.16"
-log4rs = "0.13.0"
-log = "0.4.11"
-backtrace = "0.3.50"
-failure = "0.1.8"
-failure_derive = "0.1.8"
-async-trait = "0.1.38"
-include_dir = "0.6.0"
-ansi_term = "0.11.0"

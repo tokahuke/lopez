@@ -861,6 +861,7 @@ dependencies = [
 name = "lib-lopez"
 version = "0.1.0"
 dependencies = [
+ "ansi_term",
  "async-trait",
  "backtrace",
  "failure",
@@ -872,6 +873,7 @@ dependencies = [
  "lazy_static",
  "libflate",
  "log",
+ "log4rs",
  "nom",
  "rayon",
  "regex",
@@ -971,37 +973,10 @@ dependencies = [
 name = "lopez"
 version = "0.2.0"
 dependencies = [
- "ansi_term",
- "async-trait",
- "backtrace",
- "failure",
- "failure_derive",
- "futures",
- "http",
- "hyper",
- "hyper-tls",
- "include_dir",
- "lazy_static",
  "lib-lopez",
- "libflate",
- "log",
- "log4rs",
- "migrant_lib",
- "nom",
  "postgres-lopez",
- "rayon",
- "regex",
- "reqwest",
- "robots_txt",
- "scraper",
- "serde",
- "serde_derive",
- "serde_json",
- "siphasher",
  "structopt",
  "tokio",
- "tokio-postgres",
- "url",
 ]
 
 [[package]]
