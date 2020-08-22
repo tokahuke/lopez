@@ -312,7 +312,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
     pub fn crawl(self, worker_id: usize) -> (mpsc::Sender<(Url, u16)>, Canceler) {
         let max_tasks_per_worker = self.profile.max_tasks_per_worker;
         let (url_sender, url_stream) = mpsc::channel(max_tasks_per_worker);
-        let canceler = spawn_onto_thread(format!("lpz-wrk-{}", worker_id), async move || {
+        let canceler = spawn_onto_thread(format!("lpz-wrk-{}", worker_id), move || async move {
             log::info!("worker started");
 
             // Spawn all connections:
