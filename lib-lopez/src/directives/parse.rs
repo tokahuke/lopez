@@ -348,7 +348,7 @@ fn flag_directive(directive_tags: &'static [&'static str]) -> impl Fn(&str) -> I
 
 #[test]
 fn flag_directive_test() {
-    assert_eq!(string_directive(&["foo"])("foo;"), Ok(("", ())));
+    assert_eq!(flag_directive(&["foo"])("foo;"), Ok(("", ())));
 }
 
 #[derive(Debug, Clone)]
