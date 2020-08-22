@@ -23,7 +23,7 @@ pub async fn start<B: Backend>(
 ) -> Result<(), crate::Error> {
     // Set panics to be logged:
     crate::panic::log_panics();
-    
+
     // Set global (transient) information on origins:
     let origins = Arc::new(Origins::new(
         profile.max_hits_per_sec,

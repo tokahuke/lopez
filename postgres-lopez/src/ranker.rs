@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use tokio_postgres::{Client, Statement};
 
-use lib_lopez::backend::{PageRanker, async_trait};
+use lib_lopez::backend::{async_trait, PageRanker};
 
 const CANONICAL_LINKAGE: &str = include_str!("sql/canonical_linkage.sql");
 const ENSURE_PAGE_RANK: &str = include_str!("sql/ensure_page_rank.sql");
@@ -55,10 +55,7 @@ impl PageRanker for PostgresPageRanker {
         Ok(Box::new(edges))
     }
 
-    async fn push_page_ranks(
-        &self,
-        ranked: &[(Self::PageId, f64)],
-    ) -> Result<(), crate::Error> {
+    async fn push_page_ranks(&self, ranked: &[(Self::PageId, f64)]) -> Result<(), crate::Error> {
         let (page_batch, rank_batch): (Vec<_>, Vec<_>) = ranked.iter().cloned().unzip();
         let params = params![&self.wave_id, page_batch, rank_batch];
         self.client.execute(&self.ensure_page_rank, params).await?;

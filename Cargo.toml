@@ -1,5 +1,5 @@
 [profile.release]
-debug = true
+# debug = true
 # lto = "thin"
 
 [workspace]

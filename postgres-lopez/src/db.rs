@@ -18,14 +18,21 @@ macro_rules! params {
 
 #[derive(Debug, StructOpt)]
 pub struct DbConfig {
+    /// The host name of the PostgreSQL server.
     #[structopt(long, env = "DB_HOST")]
     host: String,
+    /// The port number of the PostgreSQL server.
     #[structopt(long, default_value = "5432", env = "DB_PORT")]
     port: u16,
+    /// The user that the application will use to log into the server.
     #[structopt(long, env = "DB_USER")]
     user: String,
+    /// The name of the database in the server in which information will be
+    /// stored.
     #[structopt(long, env = "DB_DBNAME")]
     dbname: String,
+    /// The password of the user that the application will use to log into the
+    /// server.
     #[structopt(long, env = "DB_PASSWORD")]
     password: String,
 }
@@ -43,7 +50,7 @@ impl DbConfig {
         .await?;
 
         // Spawn connection to run:
-        tokio::spawn(async move { 
+        tokio::spawn(async move {
             if let Err(err) = connection.await {
                 log::error!("connection failed: {}", err);
             }
