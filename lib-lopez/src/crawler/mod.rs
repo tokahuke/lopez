@@ -16,6 +16,26 @@ use crate::profile::Profile;
 
 use self::worker::CrawlWorker;
 
+/// Logs stats from time to time.
+async fn log_stats(counter: Arc<Counter>, profile: Arc<Profile>) {
+    if let Some(log_interval) = profile.log_stats_every_secs {
+        log::info!("Logging stats every {} seconds.", log_interval);
+
+        let mut interval = time::interval(Duration::from_secs_f64(log_interval));
+        let mut last = None;
+
+        loop {
+            interval.tick().await;
+            let current = counter.stats(last.as_ref(), &*profile, log_interval);
+            log::info!("{}", current);
+            last = Some(current);
+        }
+    } else {
+        log::info!("Not logging stats. Set `LOG_STATS_EVERY_SECS` to see them.");
+    }
+}
+
+/// Does the crawling.
 pub async fn start<B: Backend>(
     profile: Arc<Profile>,
     directives: Arc<Directives>,
@@ -36,6 +56,9 @@ pub async fn start<B: Backend>(
 
     // Creates a counter to get stats:
     let counter = Arc::new(Counter::default());
+
+    // Spawn task that will log stats from time to time:
+    tokio::spawn(log_stats(counter.clone(), profile.clone()));
 
     // Creates crawlers:
     let crawl_counter = counter.clone();

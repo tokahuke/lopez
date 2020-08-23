@@ -9,9 +9,7 @@ macro_rules! cli_impl {
 
         #[derive(StructOpt)]
         pub struct Cli {
-            #[structopt(long, env, default_value = "~/.local/share/lopez")]
-            pub data: PathBuf,
-            #[structopt(long, env, default_value = "/usr/share/lopez")]
+            #[structopt(long, env, default_value = "/usr/share/lopez/lib")]
             pub import_path: PathBuf,
             #[structopt(subcommand)]
             pub app: LopezApp,

@@ -1,6 +1,6 @@
 [package]
 name = "lopez"
-version = "0.2.0"
+version = "0.1.0"
 authors = ["Pedro Bittencorut Arruda <pedrobittencourt3@protonmail.ch>"]
 edition = "2018"
 homepage = "https://silentpuma.com/lopez"

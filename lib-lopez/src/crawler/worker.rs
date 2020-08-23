@@ -177,7 +177,9 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             let mut content = vec![];
 
             while let Some(chunk) = body.next().await {
-                content.extend(chunk?);
+                let chunk = chunk?;
+                self.task_counter.add_to_download_count(chunk.len());
+                content.extend(chunk);
             }
 
             // Decode contents if necessary:
