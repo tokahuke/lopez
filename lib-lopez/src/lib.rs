@@ -22,12 +22,11 @@ mod logger;
 pub use ansi_term;
 pub use crawler::start;
 pub use directives::Directives;
-pub use env::prepare_fs;
 pub use error::Error;
 pub use hash::hash;
 pub use logger::init_logger;
 pub use profile::Profile;
-pub use structopt::{StructOpt};
+pub use structopt::StructOpt;
 
 /// Entrypoint for Lopez. This "does the whole thing" for you, given the
 /// backend implementation.
@@ -53,9 +52,6 @@ macro_rules! main {
 
             // Environment interpretation:
             let cli = Cli::from_args();
-
-            // Prepare filesystem:
-            $crate::prepare_fs(&cli.data)?;
 
             match cli.app {
                 LopezApp::Validate { source } => {

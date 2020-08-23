@@ -12,9 +12,6 @@ pub fn init_logger() -> log4rs::Handle {
 
     let config = Config::builder()
         .appender(Appender::builder().build("stderr", Box::new(console)))
-        // .logger(Logger::builder().build("neuromancer", log::LevelFilter::Debug))
-        // .logger(Logger::builder().build("neuromancer_model", log::LevelFilter::Debug))
-        // .logger(Logger::builder().build("goddard_core", log::LevelFilter::Debug))
         .build(
             Root::builder()
                 .appender("stderr")

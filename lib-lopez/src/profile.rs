@@ -36,6 +36,9 @@ pub struct Profile {
     /// can make communication with a database more effective, for example.
     #[structopt(long, default_value = "2", env)]
     pub backends_per_worker: usize,
+    /// Interval between consecutive stats log entries.
+    #[structopt(long, env)]
+    pub log_stats_every_secs: Option<f64>,
 
     /// The size of the batches of URL that are to be fetched from the backend.
     #[structopt(long, default_value = "1024", env)]

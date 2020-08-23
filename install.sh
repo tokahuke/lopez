@@ -10,7 +10,7 @@ cargo build --release --all &&
 echo 'Installing `lopez` to `/usr/local/bin`
 Will need `sudo` for this...' &&
 sudo cp target/release/lopez /usr/local/bin &&
-echo 'Installing `std-lopez` to `/usr/share/lopez`' &&
-sudo mkdir -p /usr/share/lopez &&
-sudo cp std-lopez/*.lcd /usr/share/lopez &&
+echo 'Installing `std-lopez` to `/usr/share/lopez/`' &&
+sudo mkdir -p /usr/share/lopez/lib &&
+sudo cp -r std-lopez/* /usr/share/lopez/lib &&
 echo 'Erfolgreich!'
