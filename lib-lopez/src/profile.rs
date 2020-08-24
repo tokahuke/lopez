@@ -24,7 +24,7 @@ pub struct Profile {
     #[structopt(long, default_value = "60", env)]
     pub request_timeout: f64,
     /// The maximum size allowed for a given HTTP body download in bytes.
-    #[structopt(long, default_value = "10_000_000", env)]
+    #[structopt(long, default_value = "10000000", env)]
     pub max_body_size: usize,
 
     /// The number of worker units to be run. Each worker runs in its own
