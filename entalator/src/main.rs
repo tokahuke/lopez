@@ -1,7 +1,7 @@
 use include_dir::{Dir, DirEntry};
-use std::path::PathBuf;
-use std::{fs, io, env};
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
+use std::{env, fs, io};
 
 const LOPEZ_BIN: &[u8] = include_bytes!("../../target/release/lopez");
 const LOPEZ_LIB: Dir = include_dir::include_dir!("../std-lopez");
@@ -12,7 +12,7 @@ fn install() -> io::Result<()> {
     println!("Installing `lopez` to `/usr/local/bin");
 
     fs::write("/usr/local/bin/lopez", LOPEZ_BIN)?;
-    fs::set_permissions("/usr/local/bin/lopez", fs::Permissions::from_mode(0711))?;
+    fs::set_permissions("/usr/local/bin/lopez", fs::Permissions::from_mode(0o711))?;
 
     println!("Installing `std-lopez` to `usr/share/lopez`");
 
@@ -24,7 +24,7 @@ fn install() -> io::Result<()> {
                 println!("... creating folder {:?}", dir.path());
                 let path = lib_path.join(dir.path());
                 fs::create_dir_all(&path)?;
-                fs::set_permissions(&path, fs::Permissions::from_mode(0744))?;
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
             }
             _ => {
                 // Wait for it...
@@ -38,9 +38,9 @@ fn install() -> io::Result<()> {
         match entry {
             DirEntry::File(file) => {
                 println!("... writing file {:?}", file.path());
-                let path =lib_path.join(file.path()); 
+                let path = lib_path.join(file.path());
                 fs::write(&path, file.contents())?;
-                fs::set_permissions(&path, fs::Permissions::from_mode(0744))?;
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
             }
             _ => {
                 // Already done...
