@@ -6,15 +6,6 @@ use url::{Origin as UrlOrigin, Url};
 
 use crate::robots::{get_robots, RobotExclusion};
 
-// #[test]
-// fn link_test() {
-//     let base_url: Url = "https://startse.com".parse().unwrap();
-//     assert_eq!(
-//         checked_join(&base_url, "https://www.startse.com"),
-//         Ok("https://www.startse.com".parse().unwrap())
-//     );
-// }
-
 pub struct Origin {
     _base_url: Option<Url>,
     exclusion: Option<RobotExclusion>,
@@ -62,22 +53,8 @@ impl Origin {
         // If you block, it is because someone else is waiting, and so should you.
         let mut delay = self.block_until.lock().await;
         (&mut *delay).await;
-        *delay = time::delay_for(self.crawl_delay);
+        *delay = time::delay_until(time::Instant::now() + self.crawl_delay);
     }
-
-    // /// Joins the base URL for this origin with the raw string provided,
-    // /// returning on first error. If raw is already absolute (i.e., has an origin),
-    // /// only parsing is done.
-    // pub fn join(&self, raw: &str) -> Result<Url, crate::Error> {
-    //     if let Some(base_url) = &self.base_url {
-    //         checked_join(base_url, raw)
-    //     } else {
-    //         Err(crate::Error::Custom(format!(
-    //             "Joining `{}` from opaque origin",
-    //             raw
-    //         )))
-    //     }
-    // }
 
     /// Warning: this assumes that `url` is of the same origin.
     pub fn allows(&self, url: &Url) -> bool {

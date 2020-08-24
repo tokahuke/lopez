@@ -217,6 +217,9 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         // First, wait your turn!
         origin.block().await;
 
+        // Now, this is the active part until the end:
+        self.task_counter.inc_active();
+
         // Now, download, but be quick.
         match time::timeout(
             Duration::from_secs_f64(self.profile.request_timeout),
@@ -349,6 +352,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                                 depth,
                             )
                             .map(move |result| {
+                                task_counter.dec_active();
                                 if let Err(error) = result {
                                     task_counter.register_error();
                                     log::warn!("while crawling `{}` got: {}", page_url, error);
