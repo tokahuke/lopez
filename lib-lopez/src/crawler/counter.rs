@@ -61,7 +61,8 @@ impl Counter {
             downloaded: Human(self.download_count.load(Ordering::Relaxed) as f64, "B"),
             download_speed: Human(
                 (self.n_downloaded() as f64
-                    - last.map(|last| last.downloaded.0).unwrap_or_default()) / delta_t,
+                    - last.map(|last| last.downloaded.0).unwrap_or_default())
+                    / delta_t,
                 "B/s",
             ),
         }

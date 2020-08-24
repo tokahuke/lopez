@@ -59,6 +59,7 @@ fn canonical_path(path: &str) -> Result<String, String> {
                 parts.pop();
             }
             "root" => parts.clear(),
+            "" => {}
             part => parts.push(part),
         }
     }

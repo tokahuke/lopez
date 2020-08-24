@@ -57,7 +57,12 @@ macro_rules! main {
                 LopezApp::Validate { source } => {
                     // Open directives:
                     match Directives::load(source, cli.import_path) {
-                        Ok(_directives) => println!("{}", Green.bold().paint("Ok")),
+                        Ok(directives) => println!(
+                            "{}: {:#?}\n{}",
+                            Green.bold().paint("Interpreted"),
+                            directives,
+                            Green.bold().paint("Valid configuration")
+                        ),
                         Err(err) => println!("{}: {}", Red.bold().paint("Error"), err),
                     }
                 }

@@ -362,6 +362,7 @@ name = "entalator"
 version = "0.1.0"
 dependencies = [
  "include_dir",
+ "lopez",
 ]
 
 [[package]]
