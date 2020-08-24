@@ -23,6 +23,9 @@ pub struct Profile {
     /// The time limit for the download of a page.
     #[structopt(long, default_value = "60", env)]
     pub request_timeout: f64,
+    /// The maximum size allowed for a given HTTP body download in bytes.
+    #[structopt(long, default_value = "10_000_000", env)]
+    pub max_body_size: usize,
 
     /// The number of worker units to be run. Each worker runs in its own
     /// thread. Just raise this if one worker is already consuming 100% CPU,

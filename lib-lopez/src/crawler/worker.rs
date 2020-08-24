@@ -178,6 +178,17 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
 
             while let Some(chunk) = body.next().await {
                 let chunk = chunk?;
+
+                if content.len() + chunk.len() > self.profile.max_body_size {
+                    log::warn!("Got very big body. Truncating...");
+                    
+                    let truncated = &chunk[..self.profile.max_body_size - content.len()];
+                    self.task_counter.add_to_download_count(truncated.len());
+                    content.extend(truncated);
+
+                    break;
+                }
+
                 self.task_counter.add_to_download_count(chunk.len());
                 content.extend(chunk);
             }

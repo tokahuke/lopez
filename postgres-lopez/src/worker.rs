@@ -61,7 +61,7 @@ impl WorkerBackend for PostgresWorkerBackend {
             .into_iter()
             .map(|(name, result)| (name, tokio_postgres::types::Json(result)))
             .unzip();
-        let params = params![self.wave_id, hash(url.as_str()), analysis_names, results];
+        let params = params![self.wave_id, hash(&url.as_str()), analysis_names, results];
         self.client.execute(&self.ensure_analyzed, params).await?;
 
         Ok(())
@@ -75,7 +75,7 @@ impl WorkerBackend for PostgresWorkerBackend {
         links: Vec<(Reason, Url)>,
     ) -> Result<(), crate::Error> {
         let wave_id = self.wave_id;
-        let from_page_id = hash(from_url.as_str());
+        let from_page_id = hash(&from_url.as_str());
         let (reasons, to_urls): (Vec<_>, Vec<_>) = links
             .into_iter()
             .map(|(reason, url)| (reason, url.to_string()))
@@ -103,7 +103,7 @@ impl WorkerBackend for PostgresWorkerBackend {
 
     async fn ensure_error(&self, url: &Url) -> Result<(), crate::Error> {
         let wave_id = self.wave_id;
-        let page_id = hash(url.as_str());
+        let page_id = hash(&url.as_str());
 
         self.client
             .execute(&self.ensure_error, &[&wave_id, &page_id])

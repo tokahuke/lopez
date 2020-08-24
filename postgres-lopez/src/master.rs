@@ -71,7 +71,7 @@ impl MasterBackend for PostgresMasterBackend {
         let wave_id = self.wave_id;
         let page_ids = seeds
             .iter()
-            .map(|base_urls| hash(base_urls.as_str()))
+            .map(|base_urls| hash(&base_urls.as_str()))
             .collect::<Vec<_>>();
 
         // Seeds are marked as visited.

@@ -68,29 +68,32 @@ impl Origin {
 pub struct Origins {
     default_requests_per_sec: f64,
     user_agent: String,
-    origins: RwLock<HashMap<UrlOrigin, Arc<Origin>>>,
+    origins: Vec<RwLock<HashMap<UrlOrigin, Arc<Origin>>>>,
 }
+
+const SEGMENT_SIZE: usize = 32;
 
 impl Origins {
     pub fn new(default_requests_per_sec: f64, user_agent: String) -> Origins {
         Origins {
             default_requests_per_sec,
             user_agent,
-            origins: RwLock::new(HashMap::new()),
+            origins: (0..SEGMENT_SIZE).map(|_| RwLock::new(HashMap::new())).collect::<Vec<_>>(),
         }
     }
 
     pub async fn get_origin_for_url(&self, url: &Url) -> Arc<Origin> {
         let url_origin = url.origin();
+        let origins = &self.origins[crate::hash(&url_origin) as usize % SEGMENT_SIZE];
 
-        let read_guard = self.origins.read().await;
+        let read_guard = origins.read().await;
         let origin = read_guard.get(&url_origin);
 
         if let Some(origin) = origin {
             return origin.clone();
         } else {
             drop(read_guard); // prevents deadlock.
-            let mut write_guard = self.origins.write().await;
+            let mut write_guard = origins.write().await;
 
             // Recheck condition:
             if !write_guard.contains_key(&url_origin) {
@@ -107,7 +110,7 @@ impl Origins {
             drop(write_guard); // prevents deadlock.
 
             // Now, do it again (no easy recursion within async fn yet...)
-            let read_guard = self.origins.read().await;
+            let read_guard = origins.read().await;
             let origin = read_guard
                 .get(&url_origin)
                 .expect("origin should always exist by this point");
