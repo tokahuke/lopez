@@ -121,7 +121,10 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         origins: Arc<Origins>,
     ) -> CrawlWorker<WF> {
         let https = HttpsConnector::new();
-        let client = Client::builder().build::<_, hyper::Body>(https);
+        let client = Client::builder()
+            .pool_idle_timeout(Some(std::time::Duration::from_secs(30)))
+            .pool_max_idle_per_host(usize::max(1, profile.max_idle_connections / profile.workers))
+            .build::<_, hyper::Body>(https);
 
         CrawlWorker {
             client,
@@ -141,6 +144,8 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         let request = builder
             .header("User-Agent", self.profile.user_agent())
             .header("Accept-Encoding", "gzip, deflate")
+            .header("Connection", "Keep-Alive")
+            .header("Keep-Alive", format!("timeout={}, max=100", 10))
             .body(Body::from(""))
             .expect("unreachable");
 
@@ -181,7 +186,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
 
                 if content.len() + chunk.len() > self.profile.max_body_size {
                     log::warn!("Got very big body. Truncating...");
-                    
+
                     let truncated = &chunk[..self.profile.max_body_size - content.len()];
                     self.task_counter.add_to_download_count(truncated.len());
                     content.extend(truncated);
