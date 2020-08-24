@@ -8,6 +8,7 @@ pub struct Counter {
     open_count: AtomicUsize,
     closed_count: AtomicUsize,
     error_count: AtomicUsize,
+    active_count: AtomicUsize,
     download_count: AtomicUsize,
 }
 
@@ -29,8 +30,16 @@ impl Counter {
         self.closed_count.load(Ordering::Acquire) + self.error_count.load(Ordering::Acquire)
     }
 
+    pub fn inc_active(&self) {
+        self.active_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn dec_active(&self) {
+        self.active_count.fetch_sub(1, Ordering::Relaxed);
+    }
+
     pub fn n_active(&self) -> usize {
-        self.open_count.load(Ordering::Acquire) - self.n_done()
+        self.active_count.load(Ordering::Acquire)
     }
 
     pub fn add_to_download_count(&self, amount: usize) {
