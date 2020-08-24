@@ -91,9 +91,9 @@ fn tree_search<'a>(html: &'a Html) -> Vec<(Reason, &'a str)> {
     anchors.chain(canonicals).collect()
 }
 
-enum Hit {
+pub(crate) enum Hit {
     Download {
-        html: Html,
+        content: Vec<u8>,
         status_code: StatusCode,
     },
     Redirect {
@@ -214,10 +214,8 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                 _ => Err(crate::Error::UnknownContentEncoding(encoding))?,
             };
 
-            // Then, parse the page.
-            let html = Html::parse_document(&String::from_utf8_lossy(&content));
-
-            Ok(Hit::Download { html, status_code })
+            
+            Ok(Hit::Download { content, status_code })
         }
     }
 
@@ -243,8 +241,9 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         )
         .await
         {
-            Ok(Ok(Hit::Download { html, status_code })) if status_code.is_success() => {
+            Ok(Ok(Hit::Download { content, status_code })) if status_code.is_success() => {
                 // Search HTML:
+                let html = Html::parse_document(&String::from_utf8_lossy(&content));
                 let links = tree_search(&html);
                 log::debug!("found: {:?}", links);
 
