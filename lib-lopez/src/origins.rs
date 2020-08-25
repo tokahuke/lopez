@@ -1,7 +1,6 @@
-use cached::stores::SizedCache;
-use cached::Cached;
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::{self, Delay, Duration};
 use url::{Origin as UrlOrigin, Url};
 
@@ -69,7 +68,7 @@ impl Origin {
 pub struct Origins {
     default_requests_per_sec: f64,
     user_agent: String,
-    origins: Vec<Mutex<SizedCache<UrlOrigin, Arc<Origin>>>>,
+    origins: Vec<RwLock<HashMap<UrlOrigin, Arc<Origin>>>>,
 }
 
 const SEGMENT_SIZE: usize = 32;
@@ -79,9 +78,7 @@ impl Origins {
         Origins {
             default_requests_per_sec,
             user_agent,
-            origins: (0..SEGMENT_SIZE)
-                .map(|_| Mutex::new(SizedCache::with_size(10)))
-                .collect::<Vec<_>>(),
+            origins: (0..SEGMENT_SIZE).map(|_| RwLock::new(HashMap::new())).collect::<Vec<_>>(),
         }
     }
 
@@ -89,23 +86,36 @@ impl Origins {
         let url_origin = url.origin();
         let origins = &self.origins[crate::hash(&url_origin) as usize % SEGMENT_SIZE];
 
-        let mut guard = origins.lock().await;
+        let read_guard = origins.read().await;
+        let origin = read_guard.get(&url_origin);
 
-        if let Some(origin) = guard.cache_get(&url_origin) {
+        if let Some(origin) = origin {
             return origin.clone();
         } else {
-            let origin = Arc::new(
-                Origin::load(
+            drop(read_guard); // prevents deadlock.
+            let mut write_guard = origins.write().await;
+
+            // Recheck condition:
+            if !write_guard.contains_key(&url_origin) {
+                let origin = Origin::load(
                     url_origin.clone(),
                     self.default_requests_per_sec,
                     &self.user_agent,
                 )
-                .await,
-            );
+                .await;
 
-            guard.cache_set(url_origin.clone(), origin.clone());
+                write_guard.insert(url_origin.clone(), Arc::new(origin));
+            }
 
-            return origin;
+            drop(write_guard); // prevents deadlock.
+
+            // Now, do it again (no easy recursion within async fn yet...)
+            let read_guard = origins.read().await;
+            let origin = read_guard
+                .get(&url_origin)
+                .expect("origin should always exist by this point");
+
+            return origin.clone();
         }
     }
 }
