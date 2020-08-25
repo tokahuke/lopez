@@ -78,7 +78,9 @@ impl Origins {
         Origins {
             default_requests_per_sec,
             user_agent,
-            origins: (0..SEGMENT_SIZE).map(|_| RwLock::new(HashMap::new())).collect::<Vec<_>>(),
+            origins: (0..SEGMENT_SIZE)
+                .map(|_| RwLock::new(HashMap::new()))
+                .collect::<Vec<_>>(),
         }
     }
 

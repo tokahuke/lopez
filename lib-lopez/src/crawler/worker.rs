@@ -9,9 +9,7 @@ use libflate::deflate::Decoder as DeflateDecoder;
 use libflate::gzip::Decoder as GzipDecoder;
 use scraper::{Html, Selector};
 use std::io::Read;
-use std::rc::Rc;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio::time::{self, Duration};
 use url::{ParseError, Url};
 
@@ -104,8 +102,7 @@ pub(crate) enum Hit {
 }
 
 pub struct CrawlWorker<WF: WorkerBackendFactory> {
-    count: RwLock<usize>,
-    client: RwLock<Client<HttpsConnector<HttpConnector>, Body>>,
+    client: Client<HttpsConnector<HttpConnector>, Body>,
     task_counter: Arc<Counter>,
     profile: Arc<Profile>,
     analyzer: Analyzer,
@@ -123,15 +120,14 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         origins: Arc<Origins>,
     ) -> CrawlWorker<WF> {
         let https = HttpsConnector::new();
-        let client = RwLock::new(Client::builder()
+        let client = Client::builder()
             .pool_idle_timeout(Some(std::time::Duration::from_secs_f64(
                 5. / profile.max_hits_per_sec,
             )))
-            .pool_max_idle_per_host(1) // very stringent, but useful.
-            .build::<_, hyper::Body>(https));
+            .pool_max_idle_per_host(0) // very stringent, but useful.
+            .build::<_, hyper::Body>(https);
 
         CrawlWorker {
-            count: RwLock::new(0),
             client,
             task_counter,
             profile,
@@ -139,26 +135,6 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             boundaries: directives.boundaries(),
             worker_backend_factory,
             origins,
-        }
-    }
-
-    async fn get_client(&self) -> Client<HttpsConnector<HttpConnector>, Body> {
-        let mut guard = self.count.write().await;
-        *guard += 1;
-        if *guard == 250 {
-            *guard = 0;
-            let mut guard = self.client.write().await;
-            let https = HttpsConnector::new();
-            *guard = Client::builder()
-            .pool_idle_timeout(Some(std::time::Duration::from_secs_f64(
-                5. / self.profile.max_hits_per_sec,
-            )))
-            .pool_max_idle_per_host(1) // very stringent, but useful.
-            .build::<_, hyper::Body>(https);
-
-            guard.clone()
-        } else {
-            self.client.read().await.clone()
         }
     }
 
@@ -175,7 +151,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             .expect("unreachable");
 
         // Send the request:
-        let response = self.get_client().await.request(request).await?;
+        let response = self.client.request(request).await?;
 
         // Get status and filter redirects:
         let status_code = response.status();
@@ -247,9 +223,9 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
     }
 
     pub async fn crawl_task(
-        self: Rc<Self>,
-        worker_backend: Rc<WF::Worker>,
-        page_url: Url,
+        &self,
+        worker_backend: &WF::Worker,
+        page_url: &Url,
         depth: u16,
     ) -> Result<(), crate::Error> {
         // Get origin:
@@ -264,7 +240,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         // Now, download, but be quick.
         match time::timeout(
             Duration::from_secs_f64(self.profile.request_timeout),
-            self.download(&page_url),
+            self.download(page_url),
         )
         .await
         {
@@ -278,13 +254,13 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                 log::debug!("found: {:?}", links);
 
                 // Now, parse and see what stays in and what goes away:
-                let filtered_links = if self.boundaries.is_frontier(&page_url) {
+                let filtered_links = if self.boundaries.is_frontier(page_url) {
                     vec![]
                 } else {
                     links
-                        .iter()
-                        .filter_map(|(reason, raw)| match checked_join(&page_url, raw) {
-                            Ok(url) => Some((*reason, self.boundaries.filter_query_params(url))),
+                        .into_iter()
+                        .filter_map(|(reason, raw)| match checked_join(page_url, raw) {
+                            Ok(url) => Some((reason, self.boundaries.filter_query_params(url))),
                             Err(err) => {
                                 log::debug!("at {}: {}", page_url, err);
                                 None
@@ -297,42 +273,43 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                         .collect::<Vec<_>>()
                 };
 
-                let analyses = self.analyzer.analyze(&page_url, &html);
+                let analyses = self.analyzer.analyze(page_url, &html);
 
                 // Drop heavy stuff:
                 drop(html);
                 drop(content);
+                drop(origin);
 
                 // Perform analyses:
                 worker_backend
-                    .ensure_analyzed(&page_url, analyses)
+                    .ensure_analyzed(page_url, analyses)
                     .await
                     .map_err(|err| err.into())?;
 
                 // Mark as explored:
                 worker_backend
-                    .ensure_explored(&page_url, status_code, depth + 1, filtered_links)
+                    .ensure_explored(page_url, status_code, depth + 1, filtered_links)
                     .await
                     .map_err(|err| err.into())?;
             }
             Ok(Ok(Hit::Download { status_code, .. })) => {
                 worker_backend
-                    .ensure_explored(&page_url, status_code, depth + 1, vec![])
+                    .ensure_explored(page_url, status_code, depth + 1, vec![])
                     .await
                     .map_err(|err| err.into())?;
             }
             Ok(Ok(Hit::Redirect {
                 location,
                 status_code,
-            })) => match checked_join(&page_url, &location) {
+            })) => match checked_join(page_url, &location) {
                 Ok(location) => {
-                    if !self.boundaries.is_frontier(&page_url)
+                    if !self.boundaries.is_frontier(page_url)
                         && self.boundaries.is_allowed(&location)
                         && origin.allows(&location)
                     {
                         worker_backend
                             .ensure_explored(
-                                &page_url,
+                                page_url,
                                 status_code,
                                 depth + 1,
                                 vec![(
@@ -349,14 +326,14 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             Ok(Err(error)) => {
                 log::warn!("at {} got: {}", page_url, error);
                 worker_backend
-                    .ensure_error(&page_url)
+                    .ensure_error(page_url)
                     .await
                     .map_err(|err| err.into())?;
             }
             Err(_) => {
                 log::warn!("at {}: got timeout", page_url);
                 worker_backend
-                    .ensure_error(&page_url)
+                    .ensure_error(page_url)
                     .await
                     .map_err(|err| err.into())?;
             }
@@ -380,37 +357,43 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| err.into())?
             .into_iter()
-            .map(|worker_backend| Rc::new(worker_backend))
+            .map(|worker_backend| worker_backend)
             .collect::<Vec<_>>();
 
-            // Now, become a reference count:
-            let worker_rc = Rc::new(self);
+            // // Now, become a reference count:
+            // let worker_rc = Rc::new(self);
 
             // NOTE: do not ever, EVER, filter elements of this stream!
             // You risk making the master never finish and that is Big Trouble (tm).
+            let worker_backends = &worker_backends;
+            let worker_ref = &self; // apeasses borrow checker.
             url_stream
                 .enumerate()
                 .for_each_concurrent(
                     Some(max_tasks_per_worker),
-                    move |(i, (page_url, depth)): (_, (Url, _))| {
-                        let task_counter = worker_rc.task_counter.clone();
-                        task_counter.register_open();
-                        worker_rc
-                            .clone()
+                    move |(i, (page_url, depth)): (_, (Url, _))| async move {
+                        // Register open task:
+                        worker_ref.task_counter.register_open();
+
+                        // Run the task:
+                        let result = worker_ref
                             .crawl_task(
-                                worker_backends[i % worker_backends.len()].clone(),
-                                page_url.clone(),
+                                &worker_backends[i % worker_backends.len()],
+                                &page_url,
                                 depth,
                             )
-                            .map(move |result| {
-                                task_counter.dec_active();
-                                if let Err(error) = result {
-                                    task_counter.register_error();
-                                    log::warn!("while crawling `{}` got: {}", page_url, error);
-                                } else {
-                                    task_counter.register_closed();
-                                }
-                            })
+                            .await;
+
+                        // Running task increases active; decrease it here:
+                        worker_ref.task_counter.dec_active();
+
+                        // Now, analyze results:
+                        if let Err(error) = result {
+                            worker_ref.task_counter.register_error();
+                            log::warn!("while crawling `{}` got: {}", page_url, error);
+                        } else {
+                            worker_ref.task_counter.register_closed();
+                        }
                     },
                 )
                 .await;
