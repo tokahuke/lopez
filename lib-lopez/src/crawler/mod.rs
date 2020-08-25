@@ -99,7 +99,6 @@ pub async fn start<B: Backend>(
     master_model.reset_queue().await.map_err(|err| err.into())?;
 
     // And now, do the thing!
-    let mut chosen = 0;
     let mut n_sent = 0;
     let mut has_been_empty = false;
     let mut is_interrupted = false;
@@ -145,6 +144,8 @@ pub async fn start<B: Backend>(
 
                 // Round robin:
                 '_dispatch: for (url, depth) in batch {
+                    let chosen = crate::hash(&url.origin()) as usize % senders.len();
+
                     if senders[chosen].send((url, depth)).await.is_err() {
                         log::error!("crawler {} failed. Stopping", chosen);
                         is_interrupted = true;
@@ -152,9 +153,6 @@ pub async fn start<B: Backend>(
                     } else {
                         n_sent += 1;
                     }
-
-                    // Update which worker will be next:
-                    chosen = (chosen + 1) % senders.len();
 
                     // Stop if quota is reached:
                     if counter.n_done() >= remaining_quota {
