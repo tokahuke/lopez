@@ -11,6 +11,7 @@ use scraper::{Html, Selector};
 use std::io::Read;
 use std::rc::Rc;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio::time::{self, Duration};
 use url::{ParseError, Url};
 
@@ -103,7 +104,8 @@ pub(crate) enum Hit {
 }
 
 pub struct CrawlWorker<WF: WorkerBackendFactory> {
-    client: Client<HttpsConnector<HttpConnector>, Body>,
+    count: RwLock<usize>,
+    client: RwLock<Client<HttpsConnector<HttpConnector>, Body>>,
     task_counter: Arc<Counter>,
     profile: Arc<Profile>,
     analyzer: Analyzer,
@@ -121,14 +123,15 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         origins: Arc<Origins>,
     ) -> CrawlWorker<WF> {
         let https = HttpsConnector::new();
-        let client = Client::builder()
+        let client = RwLock::new(Client::builder()
             .pool_idle_timeout(Some(std::time::Duration::from_secs_f64(
                 5. / profile.max_hits_per_sec,
             )))
-            .pool_max_idle_per_host(0) // very stringent, but useful.
-            .build::<_, hyper::Body>(https);
+            .pool_max_idle_per_host(1) // very stringent, but useful.
+            .build::<_, hyper::Body>(https));
 
         CrawlWorker {
+            count: RwLock::new(0),
             client,
             task_counter,
             profile,
@@ -136,6 +139,26 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             boundaries: directives.boundaries(),
             worker_backend_factory,
             origins,
+        }
+    }
+
+    async fn get_client(&self) -> Client<HttpsConnector<HttpConnector>, Body> {
+        let mut guard = self.count.write().await;
+        *guard += 1;
+        if *guard == 250 {
+            *guard = 0;
+            let mut guard = self.client.write().await;
+            let https = HttpsConnector::new();
+            *guard = Client::builder()
+            .pool_idle_timeout(Some(std::time::Duration::from_secs_f64(
+                5. / self.profile.max_hits_per_sec,
+            )))
+            .pool_max_idle_per_host(1) // very stringent, but useful.
+            .build::<_, hyper::Body>(https);
+
+            guard.clone()
+        } else {
+            self.client.read().await.clone()
         }
     }
 
@@ -152,7 +175,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             .expect("unreachable");
 
         // Send the request:
-        let response = self.client.request(request).await?;
+        let response = self.get_client().await.request(request).await?;
 
         // Get status and filter redirects:
         let status_code = response.status();
@@ -274,9 +297,15 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                         .collect::<Vec<_>>()
                 };
 
+                let analyses = self.analyzer.analyze(&page_url, &html);
+
+                // Drop heavy stuff:
+                drop(html);
+                drop(content);
+
                 // Perform analyses:
                 worker_backend
-                    .ensure_analyzed(&page_url, self.analyzer.analyze(&page_url, &html))
+                    .ensure_analyzed(&page_url, analyses)
                     .await
                     .map_err(|err| err.into())?;
 
