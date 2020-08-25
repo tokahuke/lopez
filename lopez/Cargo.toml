@@ -14,3 +14,4 @@ postgres-lopez = { path = "../postgres-lopez" }
 # Still nees these two for macro expansion (irrgh! will fin a way to get rid of these).
 tokio = { version = "0.2.22", features = ["macros", "rt-core", "rt-util"] }
 structopt = "0.3.16"
+jemallocator = "0.3.2"
