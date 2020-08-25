@@ -26,10 +26,6 @@ pub struct Profile {
     /// The maximum size allowed for a given HTTP body download in bytes.
     #[structopt(long, default_value = "10000000", env)] // i.e., 10MB
     pub max_body_size: usize,
-    /// The maximum number of idle connections allowed globally. Use this to
-    /// control "too many open files" (os error 24).
-    #[structopt(long, default_value = "4096", env)]
-    pub max_idle_connections: usize,
 
     /// The number of worker units to be run. Each worker runs in its own
     /// thread. Just raise this if one worker is already consuming 100% CPU,

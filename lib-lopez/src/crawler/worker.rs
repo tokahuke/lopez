@@ -122,7 +122,9 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
     ) -> CrawlWorker<WF> {
         let https = HttpsConnector::new();
         let client = Client::builder()
-            .pool_idle_timeout(Some(std::time::Duration::from_secs_f64(5. / profile.max_hits_per_sec)))
+            .pool_idle_timeout(Some(std::time::Duration::from_secs_f64(
+                5. / profile.max_hits_per_sec,
+            )))
             .pool_max_idle_per_host(1) // very stringent, but useful.
             .build::<_, hyper::Body>(https);
 
@@ -185,7 +187,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                 let chunk = chunk?;
 
                 if content.len() + chunk.len() > self.profile.max_body_size {
-                    log::warn!("Got very big body. Truncating...");
+                    log::warn!("at {}: Got very big body. Truncating...", page_url);
 
                     let truncated = &chunk[..self.profile.max_body_size - content.len()];
                     self.task_counter.add_to_download_count(truncated.len());
@@ -214,8 +216,10 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                 _ => Err(crate::Error::UnknownContentEncoding(encoding))?,
             };
 
-            
-            Ok(Hit::Download { content, status_code })
+            Ok(Hit::Download {
+                content,
+                status_code,
+            })
         }
     }
 
@@ -241,7 +245,10 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         )
         .await
         {
-            Ok(Ok(Hit::Download { content, status_code })) if status_code.is_success() => {
+            Ok(Ok(Hit::Download {
+                content,
+                status_code,
+            })) if status_code.is_success() => {
                 // Search HTML:
                 let html = Html::parse_document(&String::from_utf8_lossy(&content));
                 let links = tree_search(&html);

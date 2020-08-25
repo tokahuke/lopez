@@ -5,6 +5,6 @@ use std::hash::{Hash, Hasher};
 pub fn hash<H: Hash>(thing: &H) -> i64 {
     let mut hasher = SipHasher24::new();
     thing.hash(&mut hasher);
-    
+
     hasher.finish() as i64
 }
