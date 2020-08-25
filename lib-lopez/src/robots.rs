@@ -121,8 +121,7 @@ Sitemap: https://querobolsa.com.br/sitemap_index.xml
 
 lazy_static! {
     static ref CLIENT: Client = Client::builder()
-        .pool_max_idle_per_host(10)
-        .pool_idle_timeout(Some(std::time::Duration::from_secs(1)))
+        .pool_max_idle_per_host(0)
         .build()
         .expect("can always build robots fetching reqwest::Client");
 }

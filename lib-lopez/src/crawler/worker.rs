@@ -122,8 +122,8 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
     ) -> CrawlWorker<WF> {
         let https = HttpsConnector::new();
         let client = Client::builder()
-            .pool_idle_timeout(Some(std::time::Duration::from_secs(30)))
-            .pool_max_idle_per_host(usize::max(1, profile.max_idle_connections / profile.workers))
+            .pool_idle_timeout(Some(std::time::Duration::from_secs_f64(5. / profile.max_hits_per_sec)))
+            .pool_max_idle_per_host(1) // very stringent, but useful.
             .build::<_, hyper::Body>(https);
 
         CrawlWorker {
