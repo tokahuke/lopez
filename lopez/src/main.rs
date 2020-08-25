@@ -2,6 +2,6 @@
 
 /// Trying to see if I can get fragmentation reduction using jemalloc.
 #[global_allocator]
-static ALLOCATOR: jemallcator::Jemalloc = jemallcator::Jemalloc;
+static ALLOCATOR: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 lib_lopez::main! { postgres_lopez::PostgresBackend }
