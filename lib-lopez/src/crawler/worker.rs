@@ -124,7 +124,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             .pool_idle_timeout(Some(std::time::Duration::from_secs_f64(
                 5. / profile.max_hits_per_sec,
             )))
-            .pool_max_idle_per_host(0) // very stringent, but useful.
+            .pool_max_idle_per_host(1) // very stringent, but useful.
             .build::<_, hyper::Body>(https);
 
         CrawlWorker {

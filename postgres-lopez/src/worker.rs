@@ -88,12 +88,15 @@ impl WorkerBackend for PostgresWorkerBackend {
 
         let params = params![wave_id, from_page_id, to_page_ids, reasons_str];
         let _ensure_links = self.client.execute(&self.ensure_links, params).await?;
+        drop(reasons_str);
 
         let params = params![to_page_ids, to_urls];
         let _ensure_names = self.client.execute(&self.ensure_names, params).await?;
+        drop(to_urls);
 
         let params = params![wave_id, to_page_ids, link_depth as i16];
         let _ensure_status = self.client.execute(&self.ensure_status, params).await?;
+        drop(to_page_ids);
 
         let params = params![wave_id, from_page_id, status_code.as_u16() as i32];
         let _ensure_closed = self.client.execute(&self.ensure_closed, params).await?;
