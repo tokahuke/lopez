@@ -139,6 +139,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
 
 [[package]]
+name = "cached"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6aaf9983f274431ca66cd5a3b19952c774384f28ff42442afeb034bfc99ac994"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -868,6 +877,7 @@ dependencies = [
  "ansi_term",
  "async-trait",
  "backtrace",
+ "cached",
  "failure",
  "failure_derive",
  "futures",
