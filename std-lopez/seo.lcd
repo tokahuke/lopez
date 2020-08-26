@@ -1,5 +1,9 @@
+/// These are common on-page SEO analyses that indicate whethere a page is sound
+/// or not. Listed here are the most grarden variety ones. This should be a
+/// somewhat expanding list, as the times change.
 
 select html {
+    /// Gets the hash of a page. This is good for detecting duplicated content.
     page-hash: first hash;
 }
 

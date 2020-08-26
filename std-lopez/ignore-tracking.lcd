@@ -1,3 +1,7 @@
+/// People sometimes leave tracking parameters on URLs, mostly on purpose, but
+/// also on accident (mainly in user generated content). Since this parameters
+/// do not alter the page in any conceivable way, it is a good idea to ignore
+/// them, especially if you are using `use param *`.
 
 // UTM parameters (used by Analytics and most of the web):
 ignore param "utm_source";
