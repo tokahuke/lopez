@@ -11,19 +11,18 @@ mod hash;
 mod origins;
 mod page_rank;
 mod panic;
-mod profile;
 mod robots;
 #[macro_use]
 mod cli;
 mod logger;
 
 pub use ansi_term;
-pub use crawler::start;
+pub use cli::Profile;
+pub use crawler::{start, test_url};
 pub use directives::Directives;
 pub use error::Error;
 pub use hash::hash;
 pub use logger::init_logger;
-pub use profile::Profile;
 pub use structopt::StructOpt;
 
 /// Entrypoint for Lopez. This "does the whole thing" for you, given the
@@ -46,6 +45,7 @@ macro_rules! main {
             use std::sync::Arc;
 
             use $crate::ansi_term::Color::{Green, Red};
+            use $crate::backend::Url;
             use $crate::Directives;
 
             // Environment interpretation:
@@ -55,13 +55,29 @@ macro_rules! main {
                 LopezApp::Validate { source } => {
                     // Open directives:
                     match Directives::load(source, cli.import_path) {
-                        Ok(directives) => println!(
-                            "{}: {:#?}\n{}",
-                            Green.bold().paint("Interpreted"),
-                            directives,
-                            Green.bold().paint("Valid configuration")
-                        ),
+                        Ok(_directives) => {
+                            println!("{}", Green.bold().paint("Valid configuration"))
+                        }
                         Err(err) => println!("{}: {}", Red.bold().paint("Error"), err),
+                    }
+                }
+                LopezApp::Test {
+                    source,
+                    test_url,
+                    profile,
+                } => {
+                    match Url::parse(&test_url) {
+                        Err(err) => println!("{}: {}", Red.bold().paint("Invalid URL"), err,),
+                        Ok(url) => {
+                            // Open directives:
+                            let directives = Arc::new(Directives::load(source, cli.import_path)?);
+
+                            // Create report:
+                            let report = $crate::test_url(Arc::new(profile), directives, url).await;
+
+                            // Show report (TODO bad representation! make something pretty):
+                            println!("{:#?}", report);
+                        }
                     }
                 }
                 LopezApp::Run {
@@ -87,4 +103,10 @@ macro_rules! main {
             Ok(())
         }
     };
+}
+
+/// A dummy module only to validate the expansion of the [`main!`] macro
+/// against the dummy backend.
+mod dummy {
+    main! { crate::backend::DummyBackend }
 }

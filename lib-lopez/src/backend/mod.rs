@@ -1,9 +1,12 @@
+mod dummy;
+
 pub use async_trait::async_trait;
 pub use hyper::StatusCode;
 pub use serde_json::Value;
 pub use structopt::StructOpt;
 pub use url::Url;
 
+pub use self::dummy::DummyBackend;
 pub use crate::crawler::Reason;
 
 use crate::page_rank::power_iteration;

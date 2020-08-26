@@ -8,32 +8,15 @@ pub use reason::Reason;
 use futures::prelude::*;
 use std::sync::Arc;
 use tokio::time::{self, Duration};
+use url::Url;
 
 use crate::backend::{Backend, MasterBackend, PageRanker};
+use crate::cli::Profile;
 use crate::directives::Directives;
 use crate::origins::Origins;
-use crate::profile::Profile;
 
-use self::worker::CrawlWorker;
-
-/// Logs stats from time to time.
-async fn log_stats(counter: Arc<Counter>, already_done: usize, profile: Arc<Profile>) {
-    if let Some(log_interval) = profile.log_stats_every_secs {
-        log::info!("Logging stats every {} seconds.", log_interval);
-
-        let mut interval = time::interval(Duration::from_secs_f64(log_interval));
-        let mut last = None;
-
-        loop {
-            interval.tick().await;
-            let current = counter.stats(last.as_ref(), already_done, &*profile, log_interval);
-            log::info!("{}", current);
-            last = Some(current);
-        }
-    } else {
-        log::info!("Not logging stats. Set `LOG_STATS_EVERY_SECS` to see them.");
-    }
-}
+use self::counter::log_stats;
+use self::worker::{CrawlWorker, TestRunReport};
 
 /// Does the crawling.
 pub async fn start<B: Backend>(
@@ -79,7 +62,7 @@ pub async fn start<B: Backend>(
                 worker_model_factory.clone(),
                 origins.clone(),
             )
-            .crawl(worker_id)
+            .run(worker_id)
         })
         .unzip();
 
@@ -198,4 +181,32 @@ pub async fn start<B: Backend>(
         log::info!("crawl was interrupted");
         Err(crate::Error::Custom("crawl was interrupted".to_owned()))
     }
+}
+
+/// Tests a URL and says what is happening.
+pub async fn test_url(
+    profile: Arc<Profile>,
+    directives: Arc<Directives>,
+    url: Url,
+) -> TestRunReport {
+    // Set global (transient) information on origins:
+    let origins = Arc::new(Origins::new(
+        profile.max_hits_per_sec,
+        profile.user_agent().to_owned(),
+    ));
+
+    // Load dummy data model:
+    let backend = crate::backend::DummyBackend::default();
+    let master_model = backend
+        .build_master()
+        .await
+        .expect("can always build DummyMasterBackend");
+    let worker_model_factory = Arc::new(backend.build_worker_factory(master_model.wave_id()));
+
+    // Creates a counter to get stats:
+    let counter = Arc::new(Counter::default());
+
+    CrawlWorker::new(counter, profile, directives, worker_model_factory, origins)
+        .test_url(url)
+        .await
 }
