@@ -8,11 +8,3 @@ select
 from
     unnest($2::bigint[]) as _ (page_id)
 on conflict do nothing;
--- from (
---     -- page_id has to be unique for ON CONFLICT.
---     select distinct * from unnest($2::bigint[]) as _ (page_id)
--- ) as _
--- on conflict (wave_id, page_id) do update set
---     depth = least(status.depth, $3::smallint)
--- where
---     status.search_status = 'open';

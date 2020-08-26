@@ -50,13 +50,26 @@ impl Counter {
         self.download_count.load(Ordering::Relaxed)
     }
 
-    pub fn stats(&self, last: Option<&Stats>, profile: &Profile, delta_t: f64) -> Stats {
+    pub fn stats(
+        &self,
+        last: Option<&Stats>,
+        already_done: usize,
+        profile: &Profile,
+        delta_t: f64,
+    ) -> Stats {
         Stats {
             n_active: self.n_active(),
-            n_done: FromTotal(self.n_done(), profile.quota as usize),
+            n_done: FromTotal(self.n_done() + already_done, profile.quota as usize),
             n_errors: FromTotal(
                 self.error_count.load(Ordering::Acquire),
                 profile.quota as usize,
+            ),
+            hit_rate: Human(
+                (self.n_done() + already_done
+                    - last.map(|last| last.n_done.0).unwrap_or(already_done))
+                    as f64
+                    / delta_t,
+                "/s",
             ),
             downloaded: Human(self.download_count.load(Ordering::Relaxed) as f64, "B"),
             download_speed: Human(
@@ -109,6 +122,7 @@ pub struct Stats {
     n_active: usize,
     n_done: FromTotal,
     n_errors: FromTotal,
+    hit_rate: Human,
     downloaded: Human,
     download_speed: Human,
 }
@@ -119,6 +133,7 @@ impl Display for Stats {
         writeln!(f, "\tn. active = {}", self.n_active)?;
         writeln!(f, "\tn. done = {}", self.n_done)?;
         writeln!(f, "\tn. errors = {}", self.n_errors)?;
+        writeln!(f, "\thit rate = {}", self.hit_rate)?;
         writeln!(f, "\tdownloaded = {}", self.downloaded)?;
         writeln!(f, "\tdownload speed = {}", self.download_speed)?;
 
