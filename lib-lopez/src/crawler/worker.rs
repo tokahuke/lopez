@@ -15,9 +15,9 @@ use url::{ParseError, Url};
 
 use crate::backend::{WorkerBackend, WorkerBackendFactory};
 use crate::cancel::{spawn_onto_thread, Canceler};
+use crate::cli::Profile;
 use crate::directives::{Analyzer, Boundaries, Directives};
 use crate::origins::Origins;
-use crate::profile::Profile;
 
 use super::Counter;
 use super::Reason;
@@ -99,6 +99,37 @@ pub(crate) enum Hit {
         location: String,
         status_code: StatusCode,
     },
+}
+
+#[derive(Debug)]
+pub enum Crawled {
+    Success {
+        status_code: StatusCode,
+        links: Vec<(Reason, Url)>,
+        analyses: Vec<(String, serde_json::Value)>,
+    },
+    BadStatus {
+        status_code: StatusCode,
+    },
+    Redirect {
+        status_code: StatusCode,
+        location: String,
+    },
+    Error(crate::Error),
+    TimedOut,
+}
+
+#[derive(Debug)]
+pub struct TestRunReport {
+    actual_url: Url,
+    report: ReportType,
+}
+
+#[derive(Debug)]
+pub enum ReportType {
+    DisallowedByDirectives,
+    DisallowedByOrigin,
+    Crawled(Crawled),
 }
 
 pub struct CrawlWorker<WF: WorkerBackendFactory> {
@@ -222,18 +253,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         }
     }
 
-    pub async fn crawl_task(
-        &self,
-        worker_backend: &WF::Worker,
-        page_url: &Url,
-        depth: u16,
-    ) -> Result<(), crate::Error> {
-        // Get origin:
-        let origin = self.origins.get_origin_for_url(&page_url).await;
-
-        // First, wait your turn!
-        origin.block().await;
-
+    pub async fn crawl(&self, page_url: &Url) -> Crawled {
         // Now, this is the active part until the end:
         self.task_counter.inc_active();
 
@@ -266,20 +286,45 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                                 None
                             }
                         })
-                        .filter(|(_reason, url)| {
-                            self.boundaries.is_allowed(url) && origin.allows(url)
-                        })
+                        .filter(|(_reason, url)| self.boundaries.is_allowed(url))
                         .map(|(reason, url)| (reason, self.boundaries.filter_query_params(url)))
                         .collect::<Vec<_>>()
                 };
 
                 let analyses = self.analyzer.analyze(page_url, &html);
 
-                // Drop heavy stuff:
-                drop(html);
-                drop(content);
-                drop(origin);
+                Crawled::Success {
+                    status_code,
+                    links: filtered_links,
+                    analyses,
+                }
+            }
+            Ok(Ok(Hit::Download { status_code, .. })) => Crawled::BadStatus { status_code },
+            Ok(Ok(Hit::Redirect {
+                location,
+                status_code,
+            })) => Crawled::Redirect {
+                status_code,
+                location,
+            },
+            Ok(Err(error)) => Crawled::Error(error),
+            Err(_) => Crawled::TimedOut,
+        }
+    }
 
+    pub async fn store(
+        &self,
+        worker_backend: &WF::Worker,
+        page_url: &Url,
+        depth: u16,
+        crawled: Crawled,
+    ) -> Result<(), crate::Error> {
+        match crawled {
+            Crawled::Success {
+                status_code,
+                links,
+                analyses,
+            } => {
                 // Perform analyses:
                 worker_backend
                     .ensure_analyzed(page_url, analyses)
@@ -288,24 +333,23 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
 
                 // Mark as explored:
                 worker_backend
-                    .ensure_explored(page_url, status_code, depth + 1, filtered_links)
+                    .ensure_explored(page_url, status_code, depth + 1, links)
                     .await
                     .map_err(|err| err.into())?;
             }
-            Ok(Ok(Hit::Download { status_code, .. })) => {
+            Crawled::BadStatus { status_code } => {
                 worker_backend
                     .ensure_explored(page_url, status_code, depth + 1, vec![])
                     .await
                     .map_err(|err| err.into())?;
             }
-            Ok(Ok(Hit::Redirect {
-                location,
+            Crawled::Redirect {
                 status_code,
-            })) => match checked_join(page_url, &location) {
+                location,
+            } => match checked_join(page_url, &location) {
                 Ok(location) => {
                     if !self.boundaries.is_frontier(page_url)
                         && self.boundaries.is_allowed(&location)
-                        && origin.allows(&location)
                     {
                         worker_backend
                             .ensure_explored(
@@ -323,14 +367,14 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                 }
                 Err(err) => log::debug!("at {}: {}", page_url, err),
             },
-            Ok(Err(error)) => {
+            Crawled::Error(error) => {
                 log::warn!("at {} got: {}", page_url, error);
                 worker_backend
                     .ensure_error(page_url)
                     .await
                     .map_err(|err| err.into())?;
             }
-            Err(_) => {
+            Crawled::TimedOut => {
                 log::warn!("at {}: got timeout", page_url);
                 worker_backend
                     .ensure_error(page_url)
@@ -342,7 +386,30 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         Ok(())
     }
 
-    pub fn crawl(self, worker_id: usize) -> (mpsc::Sender<(Url, u16)>, Canceler) {
+    pub async fn crawl_task(
+        &self,
+        worker_backend: &WF::Worker,
+        page_url: &Url,
+        depth: u16,
+    ) -> Result<(), crate::Error> {
+        // Get origin:
+        let origin = self.origins.get_origin_for_url(&page_url).await;
+
+        // Do not do anything if disallowed:
+        if !origin.allows(page_url) {
+            return Ok(());
+        }
+
+        // First, wait your turn!
+        origin.block().await;
+
+        let crawled = self.crawl(page_url).await;
+        self.store(worker_backend, page_url, depth, crawled).await?;
+
+        Ok(())
+    }
+
+    pub fn run(self, worker_id: usize) -> (mpsc::Sender<(Url, u16)>, Canceler) {
         let max_tasks_per_worker = self.profile.max_tasks_per_worker;
         let (url_sender, url_stream) = mpsc::channel(max_tasks_per_worker);
         let canceler = spawn_onto_thread(format!("lpz-wrk-{}", worker_id), move || async move {
@@ -404,5 +471,34 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         });
 
         (url_sender, canceler)
+    }
+
+    pub async fn test_url(self, url: Url) -> TestRunReport {
+        let actual_url = self.boundaries.filter_query_params(url);
+
+        if !self.boundaries.is_allowed(&actual_url) {
+            return TestRunReport {
+                actual_url,
+                report: ReportType::DisallowedByDirectives,
+            };
+        }
+
+        // Get origin:
+        let origin = self.origins.get_origin_for_url(&actual_url).await;
+
+        // Do not do anything if disallowed:
+        if !origin.allows(&actual_url) {
+            return TestRunReport {
+                actual_url,
+                report: ReportType::DisallowedByOrigin,
+            };
+        }
+
+        let crawled = self.crawl(&actual_url).await;
+
+        TestRunReport {
+            actual_url,
+            report: ReportType::Crawled(crawled),
+        }
     }
 }

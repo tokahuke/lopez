@@ -1,7 +1,8 @@
 use std::fmt::{self, Display};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
-use crate::profile::Profile;
+use crate::cli::Profile;
 
 #[derive(Debug, Default)]
 pub struct Counter {
@@ -49,36 +50,96 @@ impl Counter {
     pub fn n_downloaded(&self) -> usize {
         self.download_count.load(Ordering::Relaxed)
     }
+}
 
-    pub fn stats(
-        &self,
-        last: Option<&Stats>,
+/// Logs stats from time to time.
+pub async fn log_stats(counter: Arc<Counter>, already_done: usize, profile: Arc<Profile>) {
+    if !profile.do_not_log_stats {
+        let log_interval = profile.log_stats_every_secs;
+        log::info!("Logging stats every {} seconds.", log_interval);
+
+        let mut interval =
+            tokio::time::interval(tokio::time::Duration::from_secs_f64(log_interval));
+        let mut tracker = StatsTracker::new(already_done, profile, counter, log_interval);
+
+        loop {
+            interval.tick().await;
+            tracker.tick();
+            log::info!("{}", tracker.get_stats());
+        }
+    } else {
+        log::info!("Not logging stats. Set `LOG_STATS_EVERY_SECS` to see them.");
+    }
+}
+
+struct StatsTracker {
+    last: Option<Stats>,
+    already_done: usize,
+    profile: Arc<Profile>,
+    counter: Arc<Counter>,
+    delta_t: f64,
+}
+
+impl StatsTracker {
+    pub fn new(
         already_done: usize,
-        profile: &Profile,
+        profile: Arc<Profile>,
+        counter: Arc<Counter>,
         delta_t: f64,
-    ) -> Stats {
-        Stats {
-            n_active: self.n_active(),
-            n_done: FromTotal(self.n_done() + already_done, profile.quota as usize),
+    ) -> StatsTracker {
+        StatsTracker {
+            last: None,
+            already_done,
+            counter,
+            profile,
+            delta_t,
+        }
+    }
+
+    pub fn tick(&mut self) {
+        let stats = Stats {
+            n_active: self.counter.n_active(),
+            n_done: FromTotal(
+                self.counter.n_done() + self.already_done,
+                self.profile.quota as usize,
+            ),
             n_errors: FromTotal(
-                self.error_count.load(Ordering::Acquire),
-                profile.quota as usize,
+                self.counter.error_count.load(Ordering::Acquire),
+                self.profile.quota as usize,
             ),
             hit_rate: Human(
-                (self.n_done() + already_done
-                    - last.map(|last| last.n_done.0).unwrap_or(already_done))
-                    as f64
-                    / delta_t,
+                (self.counter.n_done() + self.already_done
+                    - self
+                        .last
+                        .as_ref()
+                        .map(|last| last.n_done.0)
+                        .unwrap_or(self.already_done)) as f64
+                    / self.delta_t,
                 "/s",
             ),
-            downloaded: Human(self.download_count.load(Ordering::Relaxed) as f64, "B"),
+            downloaded: Human(
+                self.counter.download_count.load(Ordering::Relaxed) as f64,
+                "B",
+            ),
             download_speed: Human(
-                (self.n_downloaded() as f64
-                    - last.map(|last| last.downloaded.0).unwrap_or_default())
-                    / delta_t,
+                (self.counter.n_downloaded() as f64
+                    - self
+                        .last
+                        .as_ref()
+                        .map(|last| last.downloaded.0)
+                        .unwrap_or_default())
+                    / self.delta_t,
                 "B/s",
             ),
-        }
+        };
+
+        self.last = Some(stats);
+    }
+
+    fn get_stats(&self) -> &Stats {
+        self.last
+            .as_ref()
+            .expect("can only be called after `StatsTracker::tick`")
     }
 }
 

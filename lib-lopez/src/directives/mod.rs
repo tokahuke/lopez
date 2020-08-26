@@ -159,15 +159,46 @@ impl Directives {
         duplicates
     }
 
+    /// Finds seeds that are outside bounds.
+    /// TODO: implement "disallowed by regex so-and-so".
+    fn find_invalid_seeds(&self) -> Vec<Url> {
+        // This impl. is dumb, but works:
+        let seeds = self.seeds();
+        let boundaries = self.boundaries();
+
+        seeds
+            .into_iter()
+            .map(|url| boundaries.filter_query_params(url))
+            .filter(|url| !boundaries.is_allowed(url) || boundaries.is_frontier(url))
+            .collect::<Vec<_>>()
+    }
+
     /// Validates if all directives "are sound". Returns an error message if
     /// any error is found.
     fn validate(&self) -> Result<(), String> {
+        let mut issues = vec![];
         let duplicates = self.find_duplicate_rules();
         if !duplicates.is_empty() {
-            return Err(format!(
+            issues.push(format!(
                 "There are duplicated rules in directives: \n\t{}",
                 duplicates.into_iter().collect::<Vec<_>>().join("\n\t- ")
             ));
+        }
+
+        let invalid_seeds = self.find_invalid_seeds();
+        if !invalid_seeds.is_empty() {
+            issues.push(format!(
+                "There are seeds on the frontier or outside your boundaries: \n\t{}",
+                invalid_seeds
+                    .into_iter()
+                    .map(|url| url.as_str().to_owned())
+                    .collect::<Vec<_>>()
+                    .join("\n\nt- ")
+            ));
+        }
+
+        if !issues.is_empty() {
+            return Err(issues.join("\n"));
         }
 
         Ok(())
