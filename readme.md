@@ -3,21 +3,27 @@
 
 Crawling the Web for fun and profit.
 
+## Installing the damn thing
+
+Go to the releases section for this repository on github and download the `entalator`, our proto-distribution management system. Execute the file with `sudo` (if you trust this random stranger in the internet) and voilà! you have `lopez` installed globally, together with `lopez-std` to get you started. Ruing `entalator` with the `-u` flag uninstalls `lopez` without ever leaving a trace. The `entalator` should work on any Unix-based system; there is an open issue for porting it to Windows. 
+
+If you wish to run `lopez` on any other architecture, you may compile if from the source code in the repository. 
+
 ## Running the damn thing
 
-If you are running from the repository, you will need Rust Ecosystem, which is easy to install. Just go to https://rust-lang.org/tools/install and follow the instructions. After that, go the `lopez` folder and run:
+If you installed from the `entalator`, you are ready to go. However, if you insist on using the source code, you will need Rust Ecosystem, which is easy to install. Just go to https://rust-lang.org/tools/install and follow the instructions. After that, go the `lopez` folder and run:
 ``` bash
 cargo run --release -- --help
 ```
 To get some help on Command Line Interface usage.
 
-Or else, just download a release for your platform (comming soon...)
+Or else, just download a release for your platform
 
 ## Lopez Crawl Directives
 
 You will need a Crawl Directives file to run the crawl. This file describes what you want to scrape from web pages as well as _were_ and _how_ you want to crawl the Web. Here is a nice example (yes, syntax highlighting is supported for VSCode!):
 
-![](/img/sample-code.png)
+![Sample code example for Lopez Crawl Directives](/img/sample-code.png)
 
 Maybe one day, I can write an in-depth tutorial. For now, it is not that complex. Most is covered in the figure above.
 
@@ -42,6 +48,8 @@ Let's brag a little!
 * Lopez is still limited to a single machine. No distributed programming yet. However, what are you crawling that requires so much firepower?
 
 * This crate need more docs and more support for other backends. Sorry, I have a full-time job.
+
+* See the open issues for more scary (and interesting) stuff.
 
 ## Licensing
 
