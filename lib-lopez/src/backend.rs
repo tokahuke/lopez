@@ -67,14 +67,14 @@ pub trait PageRanker {
     type Error: Into<crate::Error>;
     type PageId: Ord + Clone;
 
-    async fn canonical_linkage(
+    async fn linkage(
         &self,
     ) -> Result<Box<dyn Iterator<Item = (Self::PageId, Self::PageId)>>, Self::Error>;
     async fn push_page_ranks(&self, ranked: &[(Self::PageId, f64)]) -> Result<(), Self::Error>;
 
     async fn page_rank(&self) -> Result<(), Self::Error> {
         // Create a stream of links:
-        let edges = self.canonical_linkage().await?;
+        let edges = self.linkage().await?;
 
         // Now, do power iteration and put the result in the DB in batches:
         let mut ranked = Vec::with_capacity(1024);

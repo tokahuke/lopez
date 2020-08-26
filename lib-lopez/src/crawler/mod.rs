@@ -17,7 +17,7 @@ use crate::profile::Profile;
 use self::worker::CrawlWorker;
 
 /// Logs stats from time to time.
-async fn log_stats(counter: Arc<Counter>, profile: Arc<Profile>) {
+async fn log_stats(counter: Arc<Counter>, already_done: usize, profile: Arc<Profile>) {
     if let Some(log_interval) = profile.log_stats_every_secs {
         log::info!("Logging stats every {} seconds.", log_interval);
 
@@ -26,7 +26,7 @@ async fn log_stats(counter: Arc<Counter>, profile: Arc<Profile>) {
 
         loop {
             interval.tick().await;
-            let current = counter.stats(last.as_ref(), &*profile, log_interval);
+            let current = counter.stats(last.as_ref(), already_done, &*profile, log_interval);
             log::info!("{}", current);
             last = Some(current);
         }
@@ -57,9 +57,6 @@ pub async fn start<B: Backend>(
     // Creates a counter to get stats:
     let counter = Arc::new(Counter::default());
 
-    // Spawn task that will log stats from time to time:
-    tokio::spawn(log_stats(counter.clone(), profile.clone()));
-
     // Creates crawlers:
     let crawl_counter = counter.clone();
     let consumed = master_model
@@ -67,6 +64,9 @@ pub async fn start<B: Backend>(
         .await
         .map_err(|err| err.into())?;
     let remaining_quota = (profile.quota as usize).saturating_sub(consumed);
+
+    // Spawn task that will log stats from time to time:
+    let _stats_handle = tokio::spawn(log_stats(counter.clone(), consumed, profile.clone()));
 
     let crawl_profile = profile.clone();
     let crawl_directives = directives.clone();
@@ -84,6 +84,15 @@ pub async fn start<B: Backend>(
         .unzip();
 
     // Ensure that the search was started:
+    let seeds = directives.seeds();
+    log::info!(
+        "Seeding: \n\t- {}",
+        seeds
+            .iter()
+            .map(|seed| seed.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\t- ")
+    );
     master_model
         .ensure_seeded(&directives.seeds())
         .await

@@ -1,5 +1,5 @@
 insert into
-    page_rank_canonical (wave_id, canonical_page_id, rank)
+    page_rank (wave_id, page_id, rank)
 select
     $1::integer, *
 from

@@ -74,16 +74,16 @@ impl MasterBackend for PostgresMasterBackend {
             .map(|base_urls| hash(&base_urls.as_str()))
             .collect::<Vec<_>>();
 
-        // Seeds are marked as visited.
-        let params = params![wave_id, page_ids, 0i16];
-        let _ensure_status = self.client.execute(&self.ensure_status, params).await?;
-
         // Seeds are now a known page.
         let params = params![
             page_ids,
             seeds.iter().map(|seed| seed.as_str()).collect::<Vec<_>>()
         ];
         let _ensure_names = self.client.execute(&self.ensure_names, params).await?;
+
+        // Seeds are marked as visited.
+        let params = params![wave_id, page_ids, 0i16];
+        let _ensure_status = self.client.execute(&self.ensure_status, params).await?;
 
         Ok(())
     }
