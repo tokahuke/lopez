@@ -1,6 +1,6 @@
 [profile.release]
 # debug = true
-# lto = "thin"
+lto = "thin"
 
 [workspace]
 
