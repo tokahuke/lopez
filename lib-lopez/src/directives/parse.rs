@@ -4,6 +4,7 @@ use nom::{
     character::complete::{multispace1, one_of},
     combinator::{all_consuming, map, opt},
     multi::{many0, separated_list},
+    number::complete::double,
     sequence::{delimited, tuple},
     IResult,
 };
@@ -504,6 +505,85 @@ fn boundary_test() {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Literal {
+    String(String),
+    Number(f64),
+}
+
+fn literal(i: &str) -> IResult<&str, Literal> {
+    alt((
+        map(escaped_string, |string| Literal::String(string)),
+        map(double, |number| Literal::Number(number)),
+    ))(i)
+}
+
+#[test]
+fn literal_test() {
+    assert_eq!(
+        literal("\"a string\""),
+        Ok(("", Literal::String("a string".to_owned())))
+    );
+    assert_eq!(literal("1.234"), Ok(("", Literal::Number(1.234))));
+    assert_eq!(literal("1234"), Ok(("", Literal::Number(1234.0))));
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetVariable {
+    pub name: String,
+    pub value: Literal,
+}
+
+fn set_variable(i: &str) -> IResult<&str, SetVariable> {
+    map(
+        tuple((
+            tag_whitespace("set"),
+            trailing_whitespace(identifier),
+            tag_whitespace("="),
+            trailing_whitespace(literal),
+            tag(";"),
+        )),
+        |(_, name, _, value, _)| SetVariable {
+            name: name.to_owned(),
+            value,
+        },
+    )(i)
+}
+
+#[test]
+fn set_variable_test() {
+    assert_eq!(
+        set_variable("set a_variable = \"a value\";"),
+        Ok((
+            "",
+            SetVariable {
+                name: "a_variable".to_owned(),
+                value: Literal::String("a value".to_owned())
+            }
+        ))
+    );
+    assert_eq!(
+        set_variable("set a_variable = 1.234;"),
+        Ok((
+            "",
+            SetVariable {
+                name: "a_variable".to_owned(),
+                value: Literal::Number(1.234),
+            }
+        ))
+    );
+    assert_eq!(
+        set_variable("set a_variable = 1234;"),
+        Ok((
+            "",
+            SetVariable {
+                name: "a_variable".to_owned(),
+                value: Literal::Number(1234.0),
+            }
+        ))
+    );
+}
+
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Item {
@@ -511,6 +591,7 @@ pub enum Item {
     Boundary(Boundary),
     Module(Module),
     RuleSet(RuleSet),
+    SetVariable(SetVariable),
 }
 
 fn item(i: &str) -> IResult<&str, Result<Item, String>> {
@@ -519,6 +600,9 @@ fn item(i: &str) -> IResult<&str, Result<Item, String>> {
         map(module, |module| Ok(Item::Module(module))),
         map(seed, |seed| Ok(Item::Seed(seed?))),
         map(boundary, |boundary| Ok(Item::Boundary(boundary?))),
+        map(set_variable, |set_variable| {
+            Ok(Item::SetVariable(set_variable))
+        }),
     ))(i)
 }
 

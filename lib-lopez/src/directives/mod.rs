@@ -1,12 +1,13 @@
 mod aggregator;
 mod parse;
 
-pub use parse::{Aggregator, Boundary, Extractor, Item, RuleSet};
+pub use parse::{Aggregator, Boundary, Extractor, Item, Literal, RuleSet};
 
 use regex::RegexSet;
 use scraper::Html;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
+use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -88,8 +89,6 @@ impl Module {
         duplicates: &mut HashSet<String>,
     ) {
         // Find all rule names:
-        // let mut rule_names = HashSet::new();
-        // let mut duplicates = HashSet::new();
         for item in &self.items {
             if let Item::RuleSet(rule_set) = item {
                 for rule_name in rule_set.aggregators.keys() {
@@ -97,6 +96,32 @@ impl Module {
                     if !rule_names.insert(prefixed.clone()) {
                         duplicates.insert(prefixed);
                     }
+                }
+            }
+        }
+    }
+
+    /// Finds invalide set-variable names within this module.
+    fn find_invalid_set_variables(&self, invalid: &mut HashSet<String>) {
+        for item in &self.items {
+            if let Item::SetVariable(set_variable) = item {
+                if Variable::try_parse(&set_variable.name).is_none() {
+                    invalid.insert(set_variable.name.clone());
+                }
+            }
+        }
+    }
+
+    /// Finds duplicate set-variable names within this module.
+    fn find_duplicate_set_variables(
+        &self,
+        set_variables: &mut HashSet<String>,
+        duplicates: &mut HashSet<String>,
+    ) {
+        for item in &self.items {
+            if let Item::SetVariable(set_variable) = item {
+                if !set_variables.insert(set_variable.name.clone()) {
+                    duplicates.insert(set_variable.name.clone());
                 }
             }
         }
@@ -173,6 +198,50 @@ impl Directives {
             .collect::<Vec<_>>()
     }
 
+    /// Finds invalid set variables.
+    fn find_invalid_set_variables(&self) -> HashSet<String> {
+        let mut invalid = HashSet::new();
+
+        for (_name, module) in &self.modules {
+            module.find_invalid_set_variables(&mut invalid);
+        }
+
+        invalid
+    }
+
+    /// Finds duplicate set variables.
+    fn find_duplicate_set_variables(&self) -> HashSet<String> {
+        let mut set_variables = HashSet::new();
+        let mut duplicates = HashSet::new();
+
+        for (_name, module) in &self.modules {
+            module.find_duplicate_set_variables(&mut set_variables, &mut duplicates);
+        }
+
+        duplicates
+    }
+
+    /// Validates set-variables types. After this, you can always unwrap errors
+    /// on `SetVariable`.
+    fn find_bad_set_variable_values(&self) -> Vec<crate::Error> {
+        let variables = self.set_variables();
+        let tests = vec![
+            variables.get_as_str(Variable::UserAgent).err(),
+            variables.get_as_usize(Variable::Quota).err(),
+            variables.get_as_usize(Variable::MaxDepth).err(),
+            variables.get_as_positive_f64(Variable::MaxHitsPerSec).err(),
+            variables
+                .get_as_positive_f64(Variable::RequestTimeout)
+                .err(),
+            variables.get_as_usize(Variable::MaxBodySize).err(),
+        ];
+
+        tests
+            .into_iter()
+            .filter_map(|maybe_err| maybe_err)
+            .collect()
+    }
+
     /// Validates if all directives "are sound". Returns an error message if
     /// any error is found.
     fn validate(&self) -> Result<(), String> {
@@ -180,7 +249,7 @@ impl Directives {
         let duplicates = self.find_duplicate_rules();
         if !duplicates.is_empty() {
             issues.push(format!(
-                "There are duplicated rules in directives: \n\t{}",
+                "There are duplicated rules in directives: \n\t- {}",
                 duplicates.into_iter().collect::<Vec<_>>().join("\n\t- ")
             ));
         }
@@ -188,13 +257,43 @@ impl Directives {
         let invalid_seeds = self.find_invalid_seeds();
         if !invalid_seeds.is_empty() {
             issues.push(format!(
-                "There are seeds on the frontier or outside your boundaries: \n\t{}",
+                "There are seeds on the frontier or outside your boundaries: \n\t- {}",
                 invalid_seeds
                     .into_iter()
                     .map(|url| url.as_str().to_owned())
                     .collect::<Vec<_>>()
                     .join("\n\nt- ")
             ));
+        }
+
+        let invalid = self.find_invalid_set_variables();
+        if !invalid.is_empty() {
+            issues.push(format!(
+                "There are invalid set-variable definitions \
+                (these name are not known): \n\t- {}",
+                invalid.into_iter().collect::<Vec<_>>().join("\n\t- "),
+            ));
+        }
+
+        let duplicates = self.find_duplicate_set_variables();
+        if !duplicates.is_empty() {
+            issues.push(format!(
+                "There are duplicate set-variable definitions \
+                (these definitions are global): \n\t- {}",
+                duplicates.into_iter().collect::<Vec<_>>().join("\n\t- "),
+            ));
+        }
+
+        let bad_values = self.find_bad_set_variable_values();
+        if !bad_values.is_empty() {
+            issues.push(format!(
+                "There are bad values for set-variables: \n\t- {}",
+                bad_values
+                    .into_iter()
+                    .map(|err| err.to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n\nt"),
+            ))
         }
 
         if !issues.is_empty() {
@@ -315,6 +414,27 @@ impl Directives {
 
         Analyzer { rule_sets }
     }
+
+    pub fn set_variables(&self) -> SetVariables {
+        let set_variables = self
+            .modules
+            .iter()
+            .flat_map(|(_module_name, module)| {
+                module.items.iter().filter_map(move |item| {
+                    if let Item::SetVariable(set_variable) = item {
+                        Some((
+                            Variable::try_parse(&set_variable.name)?,
+                            set_variable.value.clone(),
+                        ))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<BTreeMap<Variable, Literal>>();
+
+        SetVariables { set_variables }
+    }
 }
 
 #[derive(Debug)]
@@ -386,9 +506,133 @@ impl Analyzer {
                 }
 
                 states.into_iter().map(move |(name, state)| {
-                    (module_name.to_owned() + SEPARATOR + name, state.finalize())
+                    (
+                        // Top-level directives don't get the dot.
+                        if module_name != "" {
+                            module_name.to_owned() + SEPARATOR + name
+                        } else {
+                            name.to_owned()
+                        },
+                        state.finalize(),
+                    )
                 })
             })
             .collect()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Variable {
+    UserAgent,
+    Quota,
+    MaxDepth,
+    MaxHitsPerSec,
+    RequestTimeout,
+    MaxBodySize,
+}
+
+impl fmt::Display for Variable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Variable::UserAgent => "user_agent",
+                Variable::Quota => "quota",
+                Variable::MaxDepth => "max_depth",
+                Variable::MaxHitsPerSec => "max_hits_per_sec",
+                Variable::RequestTimeout => "request_timeout",
+                Variable::MaxBodySize => "max_body_size",
+            }
+        )
+    }
+}
+
+impl Variable {
+    fn try_parse(input: &str) -> Option<Variable> {
+        Some(match input {
+            "user_agent" => Variable::UserAgent,
+            "quota" => Variable::Quota,
+            "max_depth" => Variable::MaxDepth,
+            "max_hits_per_sec" => Variable::MaxHitsPerSec,
+            "request_timeout" => Variable::RequestTimeout,
+            "max_body_size" => Variable::MaxBodySize,
+            _ => return None,
+        })
+    }
+
+    fn bad_value(&self, literal: &Literal) -> crate::Error {
+        crate::Error::BadSetVariableValue(self.clone(), literal.clone())
+    }
+
+    fn retrieve_as_str<'a>(&self, literal: Option<&'a Literal>) -> Result<&'a str, crate::Error> {
+        match (self, literal) {
+            (Variable::UserAgent, None) => Ok(crate::cli::default_user_agent()),
+            (Variable::UserAgent, Some(Literal::String(user_agent))) => Ok(&*user_agent),
+            (Variable::UserAgent, Some(literal)) => Err(self.bad_value(literal)),
+            _ => panic!("cannot cast as string: {:?}", self),
+        }
+    }
+
+    // TODO: when "or patterns" stabilize, refactor this code.
+
+    fn retrieve_as_positive_f64(&self, literal: Option<&Literal>) -> Result<f64, crate::Error> {
+        match (self, literal) {
+            (Variable::MaxHitsPerSec, None) => Ok(2.5),
+            (Variable::RequestTimeout, None) => Ok(60.0),
+            (Variable::MaxHitsPerSec, Some(Literal::Number(number))) if *number > 0. => Ok(*number),
+            (Variable::RequestTimeout, Some(Literal::Number(number))) if *number > 0. => {
+                Ok(*number)
+            }
+            (Variable::MaxHitsPerSec, Some(literal)) => Err(self.bad_value(literal)),
+            (Variable::RequestTimeout, Some(literal)) => Err(self.bad_value(literal)),
+            _ => panic!("cannot cast as float: {:?}", self),
+        }
+    }
+
+    fn retrieve_as_usize(&self, literal: Option<&Literal>) -> Result<usize, crate::Error> {
+        match (self, literal) {
+            (Variable::Quota, None) => Ok(1000),
+            (Variable::MaxDepth, None) => Ok(7),
+            (Variable::MaxBodySize, None) => Ok(10_000_000),
+            (Variable::Quota, Some(Literal::Number(number)))
+                if *number > 0. && number.fract() == 0. =>
+            {
+                Ok(*number as usize)
+            }
+            (Variable::MaxDepth, Some(Literal::Number(number)))
+                if *number > 0. && number.fract() == 0. =>
+            {
+                Ok(*number as usize)
+            }
+            (Variable::MaxBodySize, Some(Literal::Number(number)))
+                if *number > 0. && number.fract() == 0. =>
+            {
+                Ok(*number as usize)
+            }
+            (Variable::Quota, Some(literal)) => Err(self.bad_value(literal)),
+            (Variable::MaxDepth, Some(literal)) => Err(self.bad_value(literal)),
+            (Variable::MaxBodySize, Some(literal)) => Err(self.bad_value(literal)),
+            _ => panic!("cannot cast as usize: {:?}", self),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct SetVariables {
+    set_variables: BTreeMap<Variable, Literal>,
+}
+
+impl SetVariables {
+    pub fn get_as_str(&self, name: Variable) -> Result<&str, crate::Error> {
+        name.retrieve_as_str(self.set_variables.get(&name))
+    }
+
+    pub fn get_as_positive_f64(&self, name: Variable) -> Result<f64, crate::Error> {
+        name.retrieve_as_positive_f64(self.set_variables.get(&name))
+    }
+
+    pub fn get_as_usize(&self, name: Variable) -> Result<usize, crate::Error> {
+        name.retrieve_as_usize(self.set_variables.get(&name))
     }
 }

@@ -19,6 +19,8 @@ pub enum Error {
     UnknownContentEncoding(String),
     #[fail(display = "timed out")]
     Timeout,
+    #[fail(display = "bad set-variable value for {}: {:?}", _0, _1)]
+    BadSetVariableValue(crate::directives::Variable, crate::directives::Literal),
     #[fail(display = "{}", _0)]
     Custom(String),
 }
