@@ -25,6 +25,17 @@ pub use hash::hash;
 pub use logger::init_logger;
 pub use structopt::StructOpt;
 
+pub fn default_user_agent() -> &'static str {
+    concat!(
+        env!("CARGO_PKG_NAME"),
+        "/",
+        env!("CARGO_PKG_VERSION"),
+        " (+",
+        env!("CARGO_PKG_HOMEPAGE"),
+        ")",
+    )
+}
+
 /// Entrypoint for Lopez. This "does the whole thing" for you, given the
 /// backend implementation.
 ///

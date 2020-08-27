@@ -567,7 +567,7 @@ impl Variable {
 
     fn retrieve_as_str<'a>(&self, literal: Option<&'a Literal>) -> Result<&'a str, crate::Error> {
         match (self, literal) {
-            (Variable::UserAgent, None) => Ok(crate::cli::default_user_agent()),
+            (Variable::UserAgent, None) => Ok(crate::default_user_agent()),
             (Variable::UserAgent, Some(Literal::String(user_agent))) => Ok(&*user_agent),
             (Variable::UserAgent, Some(literal)) => Err(self.bad_value(literal)),
             _ => panic!("cannot cast as string: {:?}", self),
