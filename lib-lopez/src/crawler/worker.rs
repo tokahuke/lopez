@@ -16,7 +16,7 @@ use url::{ParseError, Url};
 use crate::backend::{WorkerBackend, WorkerBackendFactory};
 use crate::cancel::{spawn_onto_thread, Canceler};
 use crate::cli::Profile;
-use crate::directives::{Analyzer, Boundaries, Directives};
+use crate::directives::{Analyzer, Boundaries, Directives, SetVariables, Variable};
 use crate::origins::Origins;
 
 use super::Counter;
@@ -136,6 +136,7 @@ pub struct CrawlWorker<WF: WorkerBackendFactory> {
     client: Client<HttpsConnector<HttpConnector>, Body>,
     task_counter: Arc<Counter>,
     profile: Arc<Profile>,
+    variables: Arc<SetVariables>,
     analyzer: Analyzer,
     boundaries: Boundaries,
     worker_backend_factory: Arc<WF>,
@@ -146,6 +147,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
     pub fn new(
         task_counter: Arc<Counter>,
         profile: Arc<Profile>,
+        variables: Arc<SetVariables>,
         directives: Arc<Directives>,
         worker_backend_factory: Arc<WF>,
         origins: Arc<Origins>,
@@ -153,7 +155,9 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         let https = HttpsConnector::new();
         let client = Client::builder()
             .pool_idle_timeout(Some(std::time::Duration::from_secs_f64(
-                5. / profile.max_hits_per_sec,
+                5. / variables
+                    .get_as_positive_f64(Variable::MaxHitsPerSec)
+                    .expect("bad val"),
             )))
             .pool_max_idle_per_host(1) // very stringent, but useful.
             .build::<_, hyper::Body>(https);
@@ -162,6 +166,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             client,
             task_counter,
             profile,
+            variables,
             analyzer: directives.analyzer(),
             boundaries: directives.boundaries(),
             worker_backend_factory,
@@ -174,7 +179,12 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         let uri: hyper::Uri = page_url.as_str().parse()?; // uh! patchy
         let builder = Request::get(uri);
         let request = builder
-            .header("User-Agent", self.profile.user_agent())
+            .header(
+                "User-Agent",
+                self.variables
+                    .get_as_str(Variable::UserAgent)
+                    .expect("bad val"),
+            )
             .header("Accept-Encoding", "gzip, deflate")
             .header("Connection", "Keep-Alive")
             .header("Keep-Alive", format!("timeout={}, max=100", 10))
@@ -215,11 +225,14 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
 
             while let Some(chunk) = body.next().await {
                 let chunk = chunk?;
-
-                if content.len() + chunk.len() > self.profile.max_body_size {
+                let max_body_size = self
+                    .variables
+                    .get_as_usize(Variable::MaxBodySize)
+                    .expect("bad val");
+                if content.len() + chunk.len() > max_body_size {
                     log::warn!("at {}: Got very big body. Truncating...", page_url);
 
-                    let truncated = &chunk[..self.profile.max_body_size - content.len()];
+                    let truncated = &chunk[..max_body_size - content.len()];
                     self.task_counter.add_to_download_count(truncated.len());
                     content.extend(truncated);
 
@@ -259,7 +272,11 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
 
         // Now, download, but be quick.
         match time::timeout(
-            Duration::from_secs_f64(self.profile.request_timeout),
+            Duration::from_secs_f64(
+                self.variables
+                    .get_as_positive_f64(Variable::RequestTimeout)
+                    .expect("bad val"),
+            ),
             self.download(page_url),
         )
         .await

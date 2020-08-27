@@ -12,7 +12,7 @@ use url::Url;
 
 use crate::backend::{Backend, MasterBackend, PageRanker};
 use crate::cli::Profile;
-use crate::directives::Directives;
+use crate::directives::{Directives, Variable};
 use crate::origins::Origins;
 
 use self::counter::log_stats;
@@ -27,10 +27,18 @@ pub async fn start<B: Backend>(
     // Set panics to be logged:
     crate::panic::log_panics();
 
+    // Get the set-variables definitions:
+    let variables = Arc::new(directives.set_variables());
+
     // Set global (transient) information on origins:
     let origins = Arc::new(Origins::new(
-        profile.max_hits_per_sec,
-        profile.user_agent().to_owned(),
+        variables
+            .get_as_positive_f64(Variable::MaxHitsPerSec)
+            .expect("bad val"),
+        variables
+            .get_as_str(Variable::UserAgent)
+            .expect("bad val")
+            .to_owned(),
     ));
 
     // Load data model:
@@ -46,18 +54,27 @@ pub async fn start<B: Backend>(
         .count_crawled()
         .await
         .map_err(|err| err.into())?;
-    let remaining_quota = (profile.quota as usize).saturating_sub(consumed);
+    let remaining_quota = variables
+        .get_as_usize(Variable::Quota)?
+        .saturating_sub(consumed);
 
     // Spawn task that will log stats from time to time:
-    let _stats_handle = tokio::spawn(log_stats(counter.clone(), consumed, profile.clone()));
+    let _stats_handle = tokio::spawn(log_stats(
+        counter.clone(),
+        consumed,
+        profile.clone(),
+        variables.clone(),
+    ));
 
     let crawl_profile = profile.clone();
     let crawl_directives = directives.clone();
+    let crawl_variables = variables.clone();
     let (mut senders, handles): (Vec<_>, Vec<_>) = (0..profile.workers)
         .map(move |worker_id| {
             CrawlWorker::new(
                 crawl_counter.clone(),
                 crawl_profile.clone(),
+                crawl_variables.clone(),
                 crawl_directives.clone(),
                 worker_model_factory.clone(),
                 origins.clone(),
@@ -102,7 +119,10 @@ pub async fn start<B: Backend>(
 
     'master: while !is_interrupted {
         match master_model
-            .fetch(profile.batch_size as i64, profile.max_depth as i16)
+            .fetch(
+                profile.batch_size as i64,
+                variables.get_as_usize(Variable::MaxDepth)? as i16,
+            )
             .await
         {
             Err(error) => {
@@ -188,11 +208,19 @@ pub async fn test_url(
     profile: Arc<Profile>,
     directives: Arc<Directives>,
     url: Url,
-) -> TestRunReport {
+) -> Result<TestRunReport, crate::Error> {
+    // Get the set-variables definitions:
+    let variables = Arc::new(directives.set_variables());
+
     // Set global (transient) information on origins:
     let origins = Arc::new(Origins::new(
-        profile.max_hits_per_sec,
-        profile.user_agent().to_owned(),
+        variables
+            .get_as_positive_f64(Variable::MaxHitsPerSec)
+            .expect("bad val"),
+        variables
+            .get_as_str(Variable::UserAgent)
+            .expect("bad val")
+            .to_owned(),
     ));
 
     // Load dummy data model:
@@ -206,7 +234,14 @@ pub async fn test_url(
     // Creates a counter to get stats:
     let counter = Arc::new(Counter::default());
 
-    CrawlWorker::new(counter, profile, directives, worker_model_factory, origins)
-        .test_url(url)
-        .await
+    Ok(CrawlWorker::new(
+        counter,
+        profile,
+        variables,
+        directives,
+        worker_model_factory,
+        origins,
+    )
+    .test_url(url)
+    .await)
 }

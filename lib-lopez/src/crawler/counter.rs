@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crate::cli::Profile;
+use crate::directives::{SetVariables, Variable};
 
 #[derive(Debug, Default)]
 pub struct Counter {
@@ -53,14 +54,20 @@ impl Counter {
 }
 
 /// Logs stats from time to time.
-pub async fn log_stats(counter: Arc<Counter>, already_done: usize, profile: Arc<Profile>) {
+pub async fn log_stats(
+    counter: Arc<Counter>,
+    already_done: usize,
+    profile: Arc<Profile>,
+    variables: Arc<SetVariables>,
+) {
     if !profile.do_not_log_stats {
         let log_interval = profile.log_stats_every_secs;
         log::info!("Logging stats every {} seconds.", log_interval);
 
         let mut interval =
             tokio::time::interval(tokio::time::Duration::from_secs_f64(log_interval));
-        let mut tracker = StatsTracker::new(already_done, profile, counter, log_interval);
+        let quota = variables.get_as_usize(Variable::Quota).expect("bad val");
+        let mut tracker = StatsTracker::new(already_done, quota, counter, log_interval);
 
         loop {
             interval.tick().await;
@@ -75,7 +82,7 @@ pub async fn log_stats(counter: Arc<Counter>, already_done: usize, profile: Arc<
 struct StatsTracker {
     last: Option<Stats>,
     already_done: usize,
-    profile: Arc<Profile>,
+    quota: usize,
     counter: Arc<Counter>,
     delta_t: f64,
 }
@@ -83,7 +90,7 @@ struct StatsTracker {
 impl StatsTracker {
     pub fn new(
         already_done: usize,
-        profile: Arc<Profile>,
+        quota: usize,
         counter: Arc<Counter>,
         delta_t: f64,
     ) -> StatsTracker {
@@ -91,7 +98,7 @@ impl StatsTracker {
             last: None,
             already_done,
             counter,
-            profile,
+            quota,
             delta_t,
         }
     }
@@ -101,11 +108,11 @@ impl StatsTracker {
             n_active: self.counter.n_active(),
             n_done: FromTotal(
                 self.counter.n_done() + self.already_done,
-                self.profile.quota as usize,
+                self.quota as usize,
             ),
             n_errors: FromTotal(
                 self.counter.error_count.load(Ordering::Acquire),
-                self.profile.quota as usize,
+                self.quota as usize,
             ),
             hit_rate: Human(
                 (self.counter.n_done() + self.already_done
