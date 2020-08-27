@@ -79,14 +79,3 @@ pub struct Profile {
     #[structopt(long, default_value = "1024", env)]
     pub batch_size: usize,
 }
-
-pub fn default_user_agent() -> &'static str {
-    concat!(
-        env!("CARGO_PKG_NAME"),
-        "/",
-        env!("CARGO_PKG_VERSION"),
-        " (+",
-        env!("CARGO_PKG_HOMEPAGE"),
-        ")",
-    )
-}
