@@ -27,7 +27,7 @@ To get some help on Command Line Interface usage.
 
 ## Lopez Crawl Directives
 
-You will need a Crawl Directives file to run the crawl. This file describes what you want to scrape from web pages as well as _were_ and _how_ you want to crawl the Web. For more information on the syntax and semantics, see [this link](https://github.com/tokahuke/lopez/wiki/Lopez-Crawl-Directives) Here is a nice example (yes, syntax highlighting is supported for VSCode!):
+You will need a Crawl Directives file to run the crawl. This file describes what you want to scrape from web pages as well as _were_ and _how_ you want to crawl the Web. For more information on the syntax and semantics, see [this link](https://github.com/tokahuke/lopez/wiki/Lopez-Crawl-Directives). Either way, here is a nice example (yes, syntax highlighting is supported for VSCode!):
 
 ![Sample code example for Lopez Crawl Directives](/img/sample-code.png)
 
