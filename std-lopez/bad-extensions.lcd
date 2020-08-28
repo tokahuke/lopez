@@ -2,4 +2,4 @@
 /// crawler just gobbles it up without second thoughts. It is not a huge deal
 /// but we can mitigate this stuff from the analysis. 
 
-disallow "\.(:?pdf|png|jpe?g|docx?|xlsx?|pptx?|csv|zip|rar)$";
+disallow "\.(:?pdf|png|jpe?g|docx?|xlsx?|pptx?|csv|zip|rar)/?(:?$|\?)";

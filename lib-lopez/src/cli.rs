@@ -45,8 +45,6 @@ macro_rules! cli_impl {
                 /// The URL to be used for testing.
                 #[structopt(env)]
                 test_url: String,
-                #[structopt(flatten)]
-                profile: Profile,
             },
         }
     };
@@ -78,4 +76,17 @@ pub struct Profile {
     /// The size of the batches of URL that are to be fetched from the backend.
     #[structopt(long, default_value = "1024", env)]
     pub batch_size: usize,
+}
+
+impl Default for Profile {
+    fn default() -> Profile {
+        Profile {
+            workers: 1,
+            max_tasks_per_worker: 1024,
+            backends_per_worker: 2,
+            do_not_log_stats: false,
+            log_stats_every_secs: 2.0,
+            batch_size: 1024,
+        }
+    }
 }

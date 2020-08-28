@@ -48,6 +48,35 @@
         </dict>
         <dict>
           <key>begin</key>
+          <string>(set)</string>
+          <key>beginCaptures</key>
+          <dict>
+            <key>1</key>
+            <dict>
+              <key>name</key>
+              <string>keyword.lcd</string>
+            </dict>
+          </dict>
+          <key>patterns</key>
+          <array> 
+            <dict>
+              <key>include</key>
+              <string>#main__1</string>
+            </dict>
+           </array>
+          <key>end</key>
+          <string>(;)</string>
+          <key>endCaptures</key>
+          <dict>
+            <key>1</key>
+            <dict>
+              <key>name</key>
+              <string>punctuation.lcd</string>
+            </dict>
+          </dict>
+        </dict>
+        <dict>
+          <key>begin</key>
           <string>(\{)</string>
           <key>beginCaptures</key>
           <dict>
@@ -61,7 +90,7 @@
           <array> 
             <dict>
               <key>include</key>
-              <string>#main__1</string>
+              <string>#main__2</string>
             </dict>
            </array>
           <key>end</key>
@@ -101,7 +130,7 @@
         </dict>
         <dict>
           <key>match</key>
-          <string>([\x{003a}\x{007e}\x{003d}\x{003e}\x{003c}\$\^\[\]\x{002a}\x{007c}\x{0028}\x{0029}])</string>
+          <string>([\x{003a}\x{007e}\x{003d}\x{003e}\x{003c}\$\^\[\]\x{002a}\x{007c}\x{0028}\x{0029}.])</string>
           <key>name</key>
           <string>punctuation.lcd</string>
         </dict>
@@ -149,6 +178,34 @@
       <array> 
         <dict>
           <key>include</key>
+          <string>#punctuation</string>
+        </dict>
+        <dict>
+          <key>include</key>
+          <string>#string</string>
+        </dict>
+        <dict>
+          <key>include</key>
+          <string>#numeric</string>
+        </dict>
+        <dict>
+          <key>include</key>
+          <string>#comment</string>
+        </dict>
+        <dict>
+          <key>match</key>
+          <string>([^\/\x{003a}\x{003b}.\(\)\[\]\{\}\x{0027}\x{0022}\x{0020}]+)</string>
+          <key>name</key>
+          <string>variable.lcd</string>
+        </dict>
+       </array>
+    </dict>
+    <key>main__2</key>
+    <dict>
+      <key>patterns</key>
+      <array> 
+        <dict>
+          <key>include</key>
           <string>#comment</string>
         </dict>
         <dict>
@@ -179,7 +236,7 @@
           <array> 
             <dict>
               <key>include</key>
-              <string>#main__2</string>
+              <string>#main__3</string>
             </dict>
            </array>
           <key>end</key>
@@ -195,7 +252,7 @@
         </dict>
        </array>
     </dict>
-    <key>main__2</key>
+    <key>main__3</key>
     <dict>
       <key>patterns</key>
       <array> 
@@ -213,7 +270,7 @@
         </dict>
        </array>
     </dict>
-    <key>main__3</key>
+    <key>main__4</key>
     <dict>
       <key>patterns</key>
       <array> 
@@ -237,7 +294,7 @@
       <array> 
         <dict>
           <key>match</key>
-          <string>(;|:)</string>
+          <string>([\x{003a}\x{003b}\x{003d}])</string>
           <key>name</key>
           <string>punctuation.lcd</string>
         </dict>
@@ -255,7 +312,7 @@
         </dict>
         <dict>
           <key>match</key>
-          <string>(name|text|capture|all-captures|html|inner-html|attr|hash)</string>
+          <string>(name|text|capture|all-captures|html|inner-html|attr)</string>
           <key>name</key>
           <string>entity.name.function.lcd</string>
         </dict>
