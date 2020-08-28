@@ -1,9 +1,9 @@
 use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag},
-    character::complete::{digit1, multispace1, one_of},
+    character::complete::{anychar, digit1, multispace1},
     combinator::{all_consuming, map, opt},
-    multi::{many0, separated_list},
+    multi::many0,
     number::complete::double,
     sequence::{delimited, tuple},
     IResult,
@@ -80,25 +80,31 @@ fn tag_whitespace_test() {
 fn escaped_string(i: &str) -> IResult<&str, String> {
     let (i, escaped) = delimited(
         tag("\""),
-        escaped(is_not("\""), '\\', one_of(r#""\"#)),
+        escaped(is_not(r#"\""#), '\\', anychar), // one_of(r#"""#)),
         tag("\""),
     )(i)?;
 
-    let mut unescaped = String::with_capacity(escaped.len() - 2);
+    let mut unescaped = String::with_capacity(escaped.len());
     let mut is_escaped = false;
 
     for ch in escaped.chars() {
         match ch {
-            '"' if is_escaped => unescaped.push('"'),
-            ch if is_escaped => unescaped.extend(&['\\', ch]),
+            '"' if is_escaped => {
+                is_escaped = false;
+                unescaped.push('"')
+            }
+            ch if is_escaped => {
+                is_escaped = false;
+                unescaped.extend(&['\\', ch])
+            }
             '\\' => {
                 is_escaped = true;
-                continue;
             }
-            ch => unescaped.push(ch),
+            ch => {
+                is_escaped = false;
+                unescaped.push(ch)
+            }
         }
-
-        is_escaped = false;
     }
 
     Ok((i, unescaped))
@@ -108,10 +114,20 @@ fn escaped_string(i: &str) -> IResult<&str, String> {
 fn escaped_string_test() {
     assert_eq!(
         escaped_string(
-            "\"foo\\\"
-\\nbar\"ho-ho"
+            r#""foo\"
+bar"ho-ho"#
         ),
-        Ok(("ho-ho", "foo\"\nbar".to_owned()))
+        Ok((
+            "ho-ho",
+            r#"foo"
+bar"#
+                .to_owned()
+        ))
+    );
+    assert_eq!(escaped_string("\"foo\""), Ok(("", "foo".to_owned())));
+    assert_eq!(
+        escaped_string("\"foo\\.bar\""),
+        Ok(("", "foo\\.bar".to_owned()))
     );
 }
 
@@ -218,6 +234,7 @@ pub enum Transformer {
     Length,
     IsNull,
     IsNotNull,
+    Hash,
     Get(String),
     GetIdx(usize),
     Flatten,
@@ -231,6 +248,7 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
         map(tag("is-null"), |_| Ok(Transformer::IsNull)),
         map(tag("is-not-null"), |_| Ok(Transformer::IsNotNull)),
         map(tag("length"), |_| Ok(Transformer::Length)),
+        map(tag("hash"), |_| Ok(Transformer::Hash)),
         map(tuple((tag_whitespace("get"), digit1)), |(_, digits)| {
             Ok(Transformer::GetIdx(
                 digits.parse().map_err(|err| format!("{}", err))?,
@@ -282,11 +300,8 @@ fn transformer_test() {
 pub enum Extractor {
     Name,
     Text,
-    // Capture(Regex),
-    // AllCaptures(Regex),
     Html,
     InnerHtml,
-    // Hash,
     Attr(String),
 }
 
@@ -311,24 +326,21 @@ fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
 
 #[test]
 fn extractor_test() {
-    // // No `PartialEq` for me.
-    // match extractor("capture \n\t \"$(:!?foo)*\"").unwrap().1.unwrap() {
-    //     Extractor::Capture(regex) => assert_eq!(
-    //         Regex::from_str("$(:!?foo)*").unwrap().as_str(),
-    //         regex.as_str()
-    //     ),
-    //     e => panic!("got {:?}", e),
-    // }
+    assert_eq!(extractor("name"), Ok(("", Ok(Extractor::Name))));
+    assert_eq!(
+        extractor("attr \"foo\""),
+        Ok(("", Ok(Extractor::Attr("foo".to_owned()))))
+    );
+    assert_eq!(extractor("inner-html"), Ok(("", Ok(Extractor::InnerHtml))));
 }
 
 fn extractor_expression(i: &str) -> IResult<&str, Result<ExtractorExpression, String>> {
     map(
         tuple((
-            extractor,
-            whitespace,
-            separated_list(whitespace, transformer),
+            trailing_whitespace(extractor),
+            many0(trailing_whitespace(transformer)),
         )),
-        |(extractor, _, transformers)| {
+        |(extractor, transformers)| {
             Ok(ExtractorExpression {
                 extractor: extractor?,
                 transformers: transformers.into_iter().collect::<Result<Vec<_>, _>>()?,
@@ -339,7 +351,23 @@ fn extractor_expression(i: &str) -> IResult<&str, Result<ExtractorExpression, St
 
 #[test]
 fn extractor_expression_test() {
-    unimplemented!();
+    match extractor_expression("attr \"src\" capture \"[0-9]+\"")
+        .unwrap()
+        .1
+        .unwrap()
+    {
+        ExtractorExpression {
+            extractor,
+            transformers,
+        } => {
+            assert_eq!(extractor, Extractor::Attr("src".to_owned()));
+            assert_eq!(transformers.len(), 1);
+            match &transformers[0] {
+                Transformer::Capture(regex) => assert_eq!(regex.as_str(), "[0-9]+"),
+                t => panic!("got {:?}", t),
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -363,7 +391,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
                 tag_whitespace("count"),
                 tag_whitespace("("),
                 extractor_expression,
-                tag_whitespace(")"),
+                tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::CountNotNull(extractor?)),
         ),
@@ -373,7 +401,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
                 tag_whitespace("first"),
                 tag_whitespace("("),
                 extractor_expression,
-                tag_whitespace(")"),
+                tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::First(extractor?)),
         ),
@@ -382,7 +410,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
                 tag_whitespace("collect"),
                 tag_whitespace("("),
                 extractor_expression,
-                tag_whitespace(")"),
+                tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::Collect(extractor?)),
         ),
@@ -391,18 +419,25 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
 
 #[test]
 fn aggregator_test() {
-    // // No `PartialEq` for me.
-    // match aggregator("first capture \n\t \"$(:!?foo)*\"")
-    //     .unwrap()
-    //     .1
-    //     .unwrap()
-    // {
-    //     Aggregator::First(Extractor::Capture(regex)) => assert_eq!(
-    //         Regex::from_str("$(:!?foo)*").unwrap().as_str(),
-    //         regex.as_str()
-    //     ),
-    //     e => panic!("got {:?}", e),
-    // }
+    // No `PartialEq` for me.
+    match aggregator("first(text capture \n\t \"$(:!?foo)*\")")
+        .unwrap()
+        .1
+        .unwrap()
+    {
+        Aggregator::First(ExtractorExpression {
+            extractor,
+            transformers,
+        }) => {
+            assert_eq!(extractor, Extractor::Text);
+            assert_eq!(transformers.len(), 1);
+            match &transformers[0] {
+                Transformer::Capture(regex) => assert_eq!(regex.as_str(), "$(:!?foo)*"),
+                t => panic!("got {:?}", t),
+            }
+        }
+        e => panic!("got {:?}", e),
+    }
 }
 
 fn aggregator_expression(i: &str) -> IResult<&str, Result<AggregatorExpression, String>> {
@@ -410,7 +445,7 @@ fn aggregator_expression(i: &str) -> IResult<&str, Result<AggregatorExpression, 
         tuple((
             aggregator,
             whitespace,
-            separated_list(whitespace, transformer),
+            many0(trailing_whitespace(transformer)),
         )),
         |(aggregator, _, transformers)| {
             Ok(AggregatorExpression {
@@ -423,7 +458,34 @@ fn aggregator_expression(i: &str) -> IResult<&str, Result<AggregatorExpression, 
 
 #[test]
 fn aggregator_expression_test() {
-    unimplemented!();
+    // No `PartialEq` for me.
+    match aggregator_expression("first(text capture \n\t \"$(:!?foo)*\") length ")
+        .unwrap()
+        .1
+        .unwrap()
+    {
+        AggregatorExpression {
+            aggregator:
+                Aggregator::First(ExtractorExpression {
+                    extractor,
+                    transformers,
+                }),
+            transformers: agg_transformers,
+        } => {
+            assert_eq!(extractor, Extractor::Text);
+            assert_eq!(transformers.len(), 1);
+            match &transformers[0] {
+                Transformer::Capture(regex) => assert_eq!(regex.as_str(), "$(:!?foo)*"),
+                t => panic!("got {:?}", t),
+            }
+            assert_eq!(agg_transformers.len(), 1);
+            match &agg_transformers[0] {
+                Transformer::Length => {}
+                t => panic!("got {:?}", t),
+            }
+        }
+        e => panic!("got {:?}", e),
+    }
 }
 
 fn in_directive(i: &str) -> IResult<&str, Result<Regex, String>> {
@@ -521,7 +583,7 @@ fn rule_set(i: &str) -> IResult<&str, Result<RuleSet, String>> {
 
 #[test]
 fn rule_set_test() {
-    rule_set("select td > a[href^=\"https\"] { foo: first text ; }")
+    rule_set("select td > a[href^=\"https\"] { foo: first ( text ) ; }")
         .unwrap()
         .1
         .unwrap();
@@ -738,15 +800,35 @@ fn item(i: &str) -> IResult<&str, Result<Item, String>> {
 
 #[test]
 fn item_test() {
-    item("select td > a[href^=\"https\"] { foo: first text ; }")
-        .unwrap()
-        .1
-        .unwrap();
+    // dbg!(item("select td > a[href^=\"https\"] { foo: first(text) length; }"))
+    //     .unwrap()
+    //     .1
+    //     .unwrap();
+
+    dbg!(item(
+        r#"select html {
+    ldv-num: first(
+        html all-captures "(?m)^.*0\s*8\s*0\s*0\s*4\s*1\s*1\s*0\s*5\s*0.*$"
+        each(get "0")
+    );
+}
+"#
+    ));
 }
 
 pub fn entrypoint(i: &str) -> IResult<&str, Result<Vec<Item>, String>> {
     all_consuming(map(
-        tuple((whitespace, separated_list(whitespace, item), whitespace)),
-        |(_, results, _)| results.into_iter().collect::<Result<Vec<_>, _>>(),
+        tuple((whitespace, many0(trailing_whitespace(item)))),
+        |(_, results)| results.into_iter().collect::<Result<Vec<_>, _>>(),
     ))(i)
+}
+
+#[test]
+fn entrypoint_test() {
+    dbg!(entrypoint(
+        "select * { } set foo = \"bar\"; allow \"foo\";\n"
+    ))
+    .unwrap()
+    .1
+    .unwrap();
 }

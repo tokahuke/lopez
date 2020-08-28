@@ -53,6 +53,7 @@ impl fmt::Display for Transformer {
             Transformer::Length => write!(f, "length"),
             Transformer::IsNull => write!(f, "is-null"),
             Transformer::IsNotNull => write!(f, "is-not-null"),
+            Transformer::Hash => write!(f, "hash"),
             Transformer::Get(key) => write!(f, "get {:?}", key),
             Transformer::GetIdx(idx) => write!(f, "get {}", idx),
             Transformer::Flatten => write!(f, "flatten"),
@@ -68,7 +69,9 @@ impl Transformer {
         match (self, input) {
             (Transformer::IsNull, _) => Some(Type::Bool),
             (Transformer::IsNotNull, _) => Some(Type::Bool),
+            (Transformer::Hash, Type::String) => Some(Type::Number),
             (Transformer::Length, Type::Array(_)) => Some(Type::Number),
+            (Transformer::Length, Type::String) => Some(Type::Number),
             (Transformer::Get(_), Type::Map(typ)) => Some(Type::clone(&*typ)),
             (Transformer::GetIdx(_), Type::Array(typ)) => Some(Type::clone(&*typ)),
             (Transformer::Flatten, Type::Array(inner)) => {
@@ -95,7 +98,9 @@ impl Transformer {
             (Transformer::IsNull, _) => false.into(),
             (Transformer::IsNotNull, Value::Null) => false.into(),
             (Transformer::IsNotNull, _) => true.into(),
+            (Transformer::Hash, Value::String(string)) => crate::hash(&*string).into(),
             (Transformer::Length, Value::Array(array)) => array.len().into(),
+            (Transformer::Length, Value::String(string)) => string.len().into(),
             (Transformer::Length, Value::Object(object)) => object.len().into(),
             (Transformer::Get(idx), Value::Object(object)) => {
                 object.remove(idx).unwrap_or(Value::Null)
