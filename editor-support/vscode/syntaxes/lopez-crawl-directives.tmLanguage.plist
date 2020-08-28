@@ -318,7 +318,7 @@
         </dict>
         <dict>
           <key>match</key>
-          <string>(is-null|is-not-null|length|hash|get|flatten|each|capture|all-captures)</string>
+          <string>(is-null|is-not-null|hash|as-number|greater-than|lesser-than|equals|length|get|flatten|each|filter|capture|all-captures)</string>
           <key>name</key>
           <string>entity.name.function.lcd</string>
         </dict>
