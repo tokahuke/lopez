@@ -25,6 +25,7 @@ You will get the latest Lopez experience, which is `lopez` installed for all use
 ```bash
 sudo /usr/share/lopez/entalator --uninstall
 ```
+but remember there is no turning back.
 
 This method should work on any Unix-based system; there is an [open issue](https://github.com/tokahuke/lopez/issues/4) for porting it to Windows.  However, with a bit more of setup, you can run `lopez` on most architectures. Compiling from the source code in the repository using Cargo (the Rust package manager) should be quite simple.
 
