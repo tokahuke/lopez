@@ -18,6 +18,7 @@ select h1 {
 }
 
 select link[rel="canonical"] {
+    canonical: first(attr "href");
     count-canonical: count;
 }
 

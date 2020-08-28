@@ -29,7 +29,7 @@ Or else, just download a release for your platform
 
 ## Lopez Crawl Directives
 
-You will need a Crawl Directives file to run the crawl. This file describes what you want to scrape from web pages as well as _were_ and _how_ you want to crawl the Web. Here is a nice example (yes, syntax highlighting is supported for VSCode!):
+You will need a Crawl Directives file to run the crawl. This file describes what you want to scrape from web pages as well as _were_ and _how_ you want to crawl the Web. For more information on the syntax and semantics, see [this link](./wiki/Lopez-Crawl-Directives) Here is a nice example (yes, syntax highlighting is supported for VSCode!):
 
 ![Sample code example for Lopez Crawl Directives](/img/sample-code.png)
 
@@ -40,6 +40,11 @@ Maybe one day, I can write an in-depth tutorial. For now, it is not that complex
 Lopez supports the idea of backends, which is where the data comes from and goes to. The implementation is completely generic, so you may write your own if you so wish. For now, lopez ships with a nice PostgreSQL backend for your convenience. Support for other popular databases (and unpopular ones as well) is greatly appreciated.
 
 For more information on backends, see the documentation for the `lib_lopez::backend` module.
+
+## Minimum Rust Version
+
+By now, Lopez only compiles on Rust Nightly. Unfortunately, we are waiting on the following features to be stabilized:
+* `move_ref_pattern`: https://github.com/rust-lang/rust/issues/68354
 
 ## Features
 

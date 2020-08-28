@@ -235,8 +235,15 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
     alt((
         map(tag("is-null"), |_| Ok(Transformer::IsNull)),
         map(tag("is-not-null"), |_| Ok(Transformer::IsNotNull)),
-        map(tag("length"), |_| Ok(Transformer::Length)),
         map(tag("hash"), |_| Ok(Transformer::Hash)),
+
+        map(tag("as-number"), |_| Ok(Transformer::AsNumber)),
+        map(tuple((tag("greater-than"), double)), |(_, lhs)| Ok(Transformer::GreaterThan(lhs))),
+        map(tuple((tag("lesser-than"), double)), |(_, lhs)| Ok(Transformer::LesserThan(lhs))),
+        map(tuple((tag("equals"), double)), |(_, lhs)| Ok(Transformer::Equals(lhs))),
+        
+        map(tag("length"), |_| Ok(Transformer::Length)),
+        map(tag("is-empty"), |_| Ok(Transformer::Length)),
         map(tuple((tag_whitespace("get"), digit1)), |(_, digits)| {
             Ok(Transformer::GetIdx(
                 digits.parse().map_err(|err| format!("{}", err))?,
@@ -256,6 +263,16 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
             )),
             |(_, _, transformer, _)| Ok(Transformer::Each(Box::new(transformer?))),
         ),
+        map(
+            tuple((
+                tag_whitespace("filter"),
+                tag_whitespace("("),
+                transformer,
+                tag(")"),
+            )),
+            |(_, _, transformer, _)| Ok(Transformer::Filter(Box::new(transformer?))),
+        ),
+
         map(
             tuple((tag_whitespace("capture"), escaped_string)),
             |(_, regexp)| Ok(Transformer::Capture(regex(&regexp)?)),

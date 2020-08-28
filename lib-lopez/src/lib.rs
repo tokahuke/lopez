@@ -1,5 +1,7 @@
 //! Remember: idempotent atomic operations are the key.
 
+#![feature(move_ref_pattern)]
+
 mod crawler;
 #[macro_use]
 pub mod backend;

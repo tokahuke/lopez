@@ -1,7 +1,7 @@
 use scraper::ElementRef;
 use serde_json::{to_value, Value};
 
-use super::transformer::{Type, Transformer};
+use super::transformer::{Transformer, Type};
 
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -61,7 +61,7 @@ impl ExtractorExpression {
         let mut extracted = self.extractor.extract(element_ref);
 
         for transformer in &self.transformers {
-            extracted = transformer.eval(&mut extracted);
+            extracted = transformer.eval(extracted);
         }
 
         extracted
