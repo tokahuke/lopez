@@ -3,11 +3,19 @@
 
 Crawling the Web for fun and profit.
 
+## A word of caution
+
+There is a very tenuous line between a crawl and a DoS attack. Please, be mindful of the crawling speed you inflict on websites! For your convenience, crawling is limited by default to `2.5` hits per second per [origin](https://html.spec.whatwg.org/#origin), which is a good default. You can override this value using the `set max_hits_per_sec` directive in your configuration, but make sure that you will not overload the server (or that you have the permission to do so). Remember: some people's livelihoods depend on these websites and not every site has good DoS mitigation. 
+
+Also, some people may get angry that _you_ are scraping _their_ website and may start annoying you because of that. If they are crazy enough or money is involved, they may even try to prosecute you. And the judicial system is just crazy nowadays, so who knows?
+
+In either case, [I have nothing to do with that](/license). Use this program at your own risk.
+
 ## Installing the damn thing
 
 Go to the releases section for this repository on github and download the `entalator`, our proto-distribution management system. Execute the file with `sudo` (if you trust this random stranger in the internet) and voilà! you have `lopez` installed globally, together with `lopez-std` to get you started. Ruing `entalator` with the `-u` flag uninstalls `lopez` without ever leaving a trace. The `entalator` should work on any Unix-based system; there is an open issue for porting it to Windows. 
 
-If you wish to run `lopez` on any other architecture, you may compile if from the source code in the repository. 
+If you wish to run `lopez` on any other architecture, you may compile if from the source code in the repository.
 
 ## Running the damn thing
 
