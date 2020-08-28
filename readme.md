@@ -13,9 +13,20 @@ In either case, [I have nothing to do with that](/license). Use this program at 
 
 ## Installing the damn thing
 
-Go to the releases section for this repository on github and download the `entalator`, our proto-distribution management system. Execute the file with `sudo` (if you trust this random stranger in the internet) and voilà! you have `lopez` installed globally, together with `lopez-std` to get you started. Ruing `entalator` with the `-u` flag uninstalls `lopez` without ever leaving a trace. The `entalator` should work on any Unix-based system; there is an open issue for porting it to Windows. 
+If you are feeling particularly lazy today, just copy and paste the following in your favorite command line (Unix-like only):
+```bash
+curl -L "https://github.com/tokahuke/lopez/releases/latest/download/entalator" \
+    > /tmp/entalator
+chmod +x /tmp/entalator
+sudo /tmp/entalator &&
+sudo cp /tmp/entalator /usr/share/lopez
+```
+You will get the latest Lopez experience, which is `lopez` installed for all users in your computer with full access to `lopez-std` out of the box. If you ever wish to get rid of the installation, just use the following one-liner:
+```bash
+sudo /usr/share/lopez/entalator --uninstall
+```
 
-If you wish to run `lopez` on any other architecture, you may compile if from the source code in the repository.
+This method should work on any Unix-based system; there is an [open issue](https://github.com/tokahuke/lopez/issues/4) for porting it to Windows.  However, with a bit more of setup, you can run `lopez` on most architectures. Compiling from the source code in the repository using Cargo (the Rust package manager) should be quite simple.
 
 ## Running the damn thing
 
