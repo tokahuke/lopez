@@ -72,11 +72,7 @@ macro_rules! main {
                         Err(err) => println!("{}: {}", Red.bold().paint("Error"), err),
                     }
                 }
-                LopezApp::Test {
-                    source,
-                    test_url,
-                    profile,
-                } => {
+                LopezApp::Test { source, test_url } => {
                     match Url::parse(&test_url) {
                         Err(err) => println!("{}: {}", Red.bold().paint("Invalid URL"), err,),
                         Ok(url) => {
@@ -84,7 +80,9 @@ macro_rules! main {
                             let directives = Arc::new(Directives::load(source, cli.import_path)?);
 
                             // Create report:
-                            let report = $crate::test_url(Arc::new(profile), directives, url).await;
+                            let report =
+                                $crate::test_url(Arc::new(Profile::default()), directives, url)
+                                    .await;
 
                             // Show report (TODO bad representation! make something pretty):
                             println!("{:#?}", report);
@@ -94,8 +92,8 @@ macro_rules! main {
                 LopezApp::Run {
                     source,
                     wave_name,
-                    profile,
                     config,
+                    profile,
                 } => {
                     // Init logging:
                     $crate::init_logger();

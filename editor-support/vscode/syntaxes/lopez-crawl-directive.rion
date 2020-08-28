@@ -64,6 +64,13 @@ styles [] {
    pygments_scope        = Name.Function
 }
 
+.ruleset_transformer : style {
+   color     = gold
+   ace_scope             = entity.name.function
+   textmate_scope        = entity.name.function
+   pygments_scope        = Name.Function
+}
+
 .rule_name : style {
    color                 = cyan
    ace_scope             = entity.other.attribute-name
@@ -84,6 +91,13 @@ styles [] {
 //    textmate_scope        = entity.other.attribute-name
 //    pygments_scope        = Name
 // }
+
+.variable: style {
+   color                 = white
+   ace_scope             = variable
+   textmate_scope        = variable
+   pygments_scope        = Name.Variable
+}
 
 .numeric : style {
    color                 = gold
@@ -137,6 +151,28 @@ main : context {
    : include "numeric";
    : include "punctuation";
    
+   // set-variable directives:
+   : inline_push {
+      regex          \= (set)
+      styles []       = .keyword;
+      : pop {
+         regex        \= (;)
+         styles []    = .punctuation;
+      }
+      
+      : include "punctuation";
+      : include "string";
+      : include "numeric";
+      : include "comment";
+      
+      // variable name:
+      : pattern {
+         regex          \= ([^\/:;.\(\)\[\]\{\}'" ]+)
+         styles []      = .variable;
+      }
+   }
+   
+   // Select-in directive rule set: 
    : inline_push {
       regex          \= (\{)
       styles []       = .punctuation;
@@ -163,7 +199,7 @@ main : context {
       }
    }
 
-   
+   // The in-directive.   
    : inline_push {
       regex          \= (in[ \t]*)
       styles []       = .keyword;
@@ -174,12 +210,13 @@ main : context {
       }
    }
    
-   
+   // Punctuation used in CSS selectors.
    : pattern {
-      regex          \= ([:~=><\$\^\[\]*|()])
+      regex          \= ([:~=><\$\^\[\]*|().])
       styles []       = .punctuation;
    }
    
+   // Css tag characters.
    : pattern {
       regex          \= ([#a-zA-Z0-9-_]+)
       styles []       = .css_tag;
@@ -212,7 +249,7 @@ string : context {
 
 punctuation: context {
    : pattern {
-      regex          \= (;|:)
+      regex          \= ([:;=])
       styles []       = .punctuation;
    }
 }
@@ -226,12 +263,16 @@ keywords : context {
 
 ruleset_namespace : context {
    : pattern {
-      regex \= (first|collect|count)
+      regex \= (first|collect|count|sum)
       styles[] = .ruleset_aggregator;
    }
    : pattern {
-      regex \= (name|text|capture|all-captures|html|inner-html|attr|hash)
+      regex \= (name|text|html|inner-html|attr)
       styles[] = .ruleset_extractor;
+   }
+   : pattern {
+      regex \= (is-null|is-not-null|length|hash|get|flatten|each|capture|all-captures)
+      styles[] = .ruleset_transformer;
    }
 }
 

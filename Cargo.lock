@@ -368,7 +368,7 @@ dependencies = [
 
 [[package]]
 name = "entalator"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "include_dir",
  "lopez",
@@ -899,7 +899,7 @@ dependencies = [
 
 [[package]]
 name = "lib-lopez"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ansi_term",
  "async-trait",
@@ -1012,7 +1012,7 @@ dependencies = [
 
 [[package]]
 name = "lopez"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "jemallocator",
  "lib-lopez",
@@ -1446,7 +1446,7 @@ dependencies = [
 
 [[package]]
 name = "postgres-lopez"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "failure",
  "failure_derive",

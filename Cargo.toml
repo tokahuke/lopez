@@ -4,6 +4,7 @@ lto = "thin"
 
 [workspace]
 
+default-members = ["lopez"]
 members = [
     "lib-lopez",
     "postgres-lopez",

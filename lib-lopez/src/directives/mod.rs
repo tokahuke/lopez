@@ -1,7 +1,8 @@
 mod aggregator;
 mod parse;
 
-pub use parse::{Aggregator, Boundary, Extractor, Item, Literal, RuleSet};
+pub use aggregator::Type;
+pub use parse::{Aggregator, Boundary, Extractor, Item, Literal, RuleSet, Transformer};
 
 use regex::RegexSet;
 use scraper::Html;
@@ -13,7 +14,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use url::Url;
 
-use self::aggregator::AggregatorState;
+use self::aggregator::AggregatorExpressionState;
 
 const SEPARATOR: &str = ".";
 const EXTENSION: &str = "lcd";
@@ -68,6 +69,15 @@ fn canonical_path(path: &str) -> Result<String, String> {
     Ok(parts.join(SEPARATOR))
 }
 
+/// Gives the name of a directive, given a name and a prefix.
+fn full_rule_name(prefix: &str, rule_name: &str) -> String {
+    if prefix != "" {
+        prefix.to_owned() + SEPARATOR + rule_name
+    } else {
+        rule_name.to_owned()
+    }
+}
+
 /// Directives for Lopez.
 #[derive(Debug)]
 pub struct Directives {
@@ -92,9 +102,9 @@ impl Module {
         for item in &self.items {
             if let Item::RuleSet(rule_set) = item {
                 for rule_name in rule_set.aggregators.keys() {
-                    let prefixed = prefix.clone() + SEPARATOR + rule_name;
-                    if !rule_names.insert(prefixed.clone()) {
-                        duplicates.insert(prefixed);
+                    let full_name = full_rule_name(&prefix, rule_name);
+                    if !rule_names.insert(full_name.clone()) {
+                        duplicates.insert(full_name);
                     }
                 }
             }
@@ -122,6 +132,20 @@ impl Module {
             if let Item::SetVariable(set_variable) = item {
                 if !set_variables.insert(set_variable.name.clone()) {
                     duplicates.insert(set_variable.name.clone());
+                }
+            }
+        }
+    }
+
+    /// Finds type errors:
+    fn find_type_errors(&self, prefix: String, type_errors: &mut BTreeMap<String, crate::Error>) {
+        for item in &self.items {
+            if let Item::RuleSet(rule_set) = item {
+                for (rule_name, rule) in &rule_set.aggregators {
+                    if let Err(error) = rule.type_of() {
+                        let full_name = full_rule_name(&prefix, &rule_name);
+                        type_errors.insert(full_name, error);
+                    }
                 }
             }
         }
@@ -242,6 +266,17 @@ impl Directives {
             .collect()
     }
 
+    /// Finds type errors:
+    fn find_type_errors(&self) -> BTreeMap<String, crate::Error> {
+        let mut errors = BTreeMap::new();
+
+        for (name, module) in &self.modules {
+            module.find_type_errors(name.to_owned(), &mut errors);
+        }
+
+        errors
+    }
+
     /// Validates if all directives "are sound". Returns an error message if
     /// any error is found.
     fn validate(&self) -> Result<(), String> {
@@ -292,7 +327,19 @@ impl Directives {
                     .into_iter()
                     .map(|err| err.to_string())
                     .collect::<Vec<_>>()
-                    .join("\n\nt"),
+                    .join("\n\nt- "),
+            ))
+        }
+
+        let type_errors = self.find_type_errors();
+        if !type_errors.is_empty() {
+            issues.push(format!(
+                "There are type errors for these rules: \n\t- {}",
+                type_errors
+                    .into_iter()
+                    .map(|(name, err)| format!("{}: {}", name, err))
+                    .collect::<Vec<_>>()
+                    .join("\n\t- ")
             ))
         }
 
@@ -392,7 +439,7 @@ impl Directives {
                 rule_set
                     .aggregators
                     .keys()
-                    .map(move |name| module_name.to_owned() + SEPARATOR + name)
+                    .map(move |name| full_rule_name(module_name, name))
             })
             .collect()
     }
@@ -470,7 +517,12 @@ impl Boundaries {
             .map(|(key, value)| (key.into_owned(), value.into_owned()))
             .collect::<Vec<_>>();
 
-        url.query_pairs_mut().clear().extend_pairs(filtered_pairs);
+        // This makes the url prettier by removing empty queries.
+        if !filtered_pairs.is_empty() {
+            url.query_pairs_mut().clear().extend_pairs(filtered_pairs);
+        } else {
+            url.set_query(None);
+        }
 
         url
     }
@@ -496,7 +548,7 @@ impl Analyzer {
                 let mut states = rule_set
                     .aggregators
                     .iter()
-                    .map(|(name, agg)| (name, AggregatorState::new(agg)))
+                    .map(|(name, agg)| (name, AggregatorExpressionState::new(agg)))
                     .collect::<Vec<_>>();
 
                 for element_ref in html.select(&rule_set.selector) {
@@ -508,11 +560,7 @@ impl Analyzer {
                 states.into_iter().map(move |(name, state)| {
                     (
                         // Top-level directives don't get the dot.
-                        if module_name != "" {
-                            module_name.to_owned() + SEPARATOR + name
-                        } else {
-                            name.to_owned()
-                        },
+                        full_rule_name(module_name, name),
                         state.finalize(),
                     )
                 })
