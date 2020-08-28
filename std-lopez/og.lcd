@@ -4,21 +4,21 @@
 /// This is not a comprehensive ruleset (yet); only the most vital are listed.
 
 select head meta[property="og:type"] {
-    type: first attr "content";
+    type: first(attr "content");
 }
 
 select head meta[property="og:site_name"] {
-    site-name: first attr "content";
+    site-name: first(attr "content");
 }
 
 select head meta[property="og:image"] {
-    image: first attr "content";
+    image: first(attr "content");
 }
 
 select head meta[property="og:url"] {
-    url: first attr "content";
+    url: first(attr "content");
 }
 
 select head meta[property="og:description"] {
-    description: first attr "content";
+    description: first(attr "content");
 }

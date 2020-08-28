@@ -4,16 +4,16 @@
 
 select html {
     /// Gets the hash of a page. This is good for detecting duplicated content.
-    page-hash: first hash;
+    page-hash: first(html hash);
 }
 
 select head title {
-    title: first text;
+    title: first(text);
     count-title: count;
 }
 
 select h1 {
-    h1: first text;
+    h1: first(text);
     count-h1: count;
 }
 
@@ -22,7 +22,7 @@ select link[rel="canonical"] {
 }
 
 select meta[name="description"] {
-    meta-description: first attr "content";
+    meta-description: first(attr "content");
     count-meta-description: count;
 }
 
@@ -32,5 +32,5 @@ select * {
 }
 
 select img:not([alt]) {
-    missing-alt-text: collect attr "src";
+    missing-alt-text: collect(attr "src");
 }
