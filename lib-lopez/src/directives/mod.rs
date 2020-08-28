@@ -4,6 +4,9 @@ mod transformer;
 mod variable;
 mod extractor;
 
+// Note on where to put parseable items: if it has an impl-block, it goes 
+// Somewhere Else©; if it does not have an impl-block, it stays in `parse`.
+
 pub use transformer::{Type, Transformer};
 pub use parse::{Boundary, Item, Literal, RuleSet};
 pub use variable::{Variable, SetVariables};

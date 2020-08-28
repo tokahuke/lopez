@@ -82,7 +82,7 @@ fn tag_whitespace_test() {
 fn escaped_string(i: &str) -> IResult<&str, String> {
     let (i, escaped) = delimited(
         tag("\""),
-        escaped(is_not(r#"\""#), '\\', anychar), // one_of(r#"""#)),
+        escaped(is_not(r#"\""#), '\\', anychar),
         tag("\""),
     )(i)?;
 
