@@ -1,8 +1,8 @@
 use scraper::ElementRef;
-use serde_json::{Value};
+use serde_json::Value;
 
-use super::transformer::{Type, Transformer};
 use super::extractor::ExtractorExpression;
+use super::transformer::{Transformer, Type};
 
 #[derive(Debug, Clone)]
 pub enum Aggregator {
@@ -119,7 +119,7 @@ impl<'a> AggregatorExpressionState<'a> {
         let mut finalized = self.state.finalize();
 
         for transformer in self.transformers {
-            finalized = transformer.eval(&mut finalized);
+            finalized = transformer.eval(finalized);
         }
 
         finalized

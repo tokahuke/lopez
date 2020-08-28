@@ -1,17 +1,17 @@
 mod aggregator;
+mod extractor;
 mod parse;
 mod transformer;
 mod variable;
-mod extractor;
 
-// Note on where to put parseable items: if it has an impl-block, it goes 
+// Note on where to put parseable items: if it has an impl-block, it goes
 // Somewhere Else©; if it does not have an impl-block, it stays in `parse`.
 
-pub use transformer::{Type, Transformer};
-pub use parse::{Boundary, Item, Literal, RuleSet};
-pub use variable::{Variable, SetVariables};
-pub use extractor::{Extractor, ExtractorExpression};
 pub use aggregator::{Aggregator, AggregatorExpression};
+pub use extractor::{Extractor, ExtractorExpression};
+pub use parse::{Boundary, Item, Literal, RuleSet};
+pub use transformer::{Transformer, Type};
+pub use variable::{SetVariables, Variable};
 
 use regex::RegexSet;
 use scraper::Html;
