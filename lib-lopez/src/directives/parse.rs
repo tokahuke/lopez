@@ -13,6 +13,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use url::Url;
 
+use super::*;
+
 /// Defines end of file (lol!):
 fn eof(i: &str) -> IResult<&str, ()> {
     if i.is_empty() {
@@ -229,20 +231,6 @@ fn css_selector_test() {
     );
 }
 
-#[derive(Debug, Clone)]
-pub enum Transformer {
-    Length,
-    IsNull,
-    IsNotNull,
-    Hash,
-    Get(String),
-    GetIdx(usize),
-    Flatten,
-    Each(Box<Transformer>),
-    Capture(Regex),
-    AllCaptures(Regex),
-}
-
 fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
     alt((
         map(tag("is-null"), |_| Ok(Transformer::IsNull)),
@@ -293,22 +281,6 @@ fn transformer_test() {
         ),
         e => panic!("got {:?}", e),
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[non_exhaustive]
-pub enum Extractor {
-    Name,
-    Text,
-    Html,
-    InnerHtml,
-    Attr(String),
-}
-
-#[derive(Debug, Clone)]
-pub struct ExtractorExpression {
-    pub extractor: Extractor,
-    pub transformers: Vec<Transformer>,
 }
 
 fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
@@ -368,20 +340,6 @@ fn extractor_expression_test() {
             }
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum Aggregator {
-    Count,
-    CountNotNull(ExtractorExpression),
-    First(ExtractorExpression),
-    Collect(ExtractorExpression),
-}
-
-#[derive(Debug, Clone)]
-pub struct AggregatorExpression {
-    pub aggregator: Aggregator,
-    pub transformers: Vec<Transformer>,
 }
 
 fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
