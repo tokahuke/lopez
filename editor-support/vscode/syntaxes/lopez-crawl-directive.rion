@@ -85,6 +85,13 @@ styles [] {
 //    pygments_scope        = Name
 // }
 
+.variable: style {
+   color                 = white
+   ace_scope             = variable
+   textmate_scope        = variable
+   pygments_scope        = Name.Variable
+}
+
 .numeric : style {
    color                 = gold
    ace_scope             = constant.numeric
@@ -137,6 +144,28 @@ main : context {
    : include "numeric";
    : include "punctuation";
    
+   // set-variable directives:
+   : inline_push {
+      regex          \= (set)
+      styles []       = .keyword;
+      : pop {
+         regex        \= (;)
+         styles []    = .punctuation;
+      }
+      
+      : include "punctuation";
+      : include "string";
+      : include "numeric";
+      : include "comment";
+      
+      // variable name:
+      : pattern {
+         regex          \= ([^\/:;.\(\)\[\]\{\}'" ]+)
+         styles []      = .variable;
+      }
+   }
+   
+   // Select-in directive rule set: 
    : inline_push {
       regex          \= (\{)
       styles []       = .punctuation;
@@ -163,7 +192,7 @@ main : context {
       }
    }
 
-   
+   // The in-directive.   
    : inline_push {
       regex          \= (in[ \t]*)
       styles []       = .keyword;
@@ -174,12 +203,13 @@ main : context {
       }
    }
    
-   
+   // Punctuation used in CSS selectors.
    : pattern {
-      regex          \= ([:~=><\$\^\[\]*|()])
+      regex          \= ([:~=><\$\^\[\]*|().])
       styles []       = .punctuation;
    }
    
+   // Css tag characters.
    : pattern {
       regex          \= ([#a-zA-Z0-9-_]+)
       styles []       = .css_tag;
@@ -212,7 +242,7 @@ string : context {
 
 punctuation: context {
    : pattern {
-      regex          \= (;|:)
+      regex          \= ([:;=])
       styles []       = .punctuation;
    }
 }
@@ -230,7 +260,7 @@ ruleset_namespace : context {
       styles[] = .ruleset_aggregator;
    }
    : pattern {
-      regex \= (name|text|capture|all-captures|html|inner-html|attr|hash)
+      regex \= (name|text|capture|all-captures|html|inner-html|attr)
       styles[] = .ruleset_extractor;
    }
 }

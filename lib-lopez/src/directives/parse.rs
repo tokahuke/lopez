@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag},
-    character::complete::{multispace1, one_of},
+    character::complete::{digit1, multispace1, one_of},
     combinator::{all_consuming, map, opt},
     multi::{many0, separated_list},
     number::complete::double,
@@ -80,7 +80,7 @@ fn tag_whitespace_test() {
 fn escaped_string(i: &str) -> IResult<&str, String> {
     let (i, escaped) = delimited(
         tag("\""),
-        escaped(is_not("\""), '\\', one_of(r#""nt\"#)),
+        escaped(is_not("\""), '\\', one_of(r#""\"#)),
         tag("\""),
     )(i)?;
 
@@ -89,10 +89,8 @@ fn escaped_string(i: &str) -> IResult<&str, String> {
 
     for ch in escaped.chars() {
         match ch {
-            '\\' if is_escaped => unescaped.push('\\'),
             '"' if is_escaped => unescaped.push('"'),
-            'n' if is_escaped => unescaped.push('\n'),
-            't' if is_escaped => unescaped.push('\t'),
+            ch if is_escaped => unescaped.extend(&['\\', ch]),
             '\\' => {
                 is_escaped = true;
                 continue;
@@ -109,8 +107,11 @@ fn escaped_string(i: &str) -> IResult<&str, String> {
 #[test]
 fn escaped_string_test() {
     assert_eq!(
-        escaped_string("\"foo\\t\\nbar\"ho-ho"),
-        Ok(("ho-ho", "foo\t\nbar".to_owned()))
+        escaped_string(
+            "\"foo\\\"
+\\nbar\"ho-ho"
+        ),
+        Ok(("ho-ho", "foo\"\nbar".to_owned()))
     );
 }
 
@@ -213,40 +214,94 @@ fn css_selector_test() {
 }
 
 #[derive(Debug, Clone)]
+pub enum Transformer {
+    Length,
+    IsNull,
+    IsNotNull,
+    Get(String),
+    GetIdx(usize),
+    Flatten,
+    Each(Box<Transformer>),
+    Capture(Regex),
+    AllCaptures(Regex),
+}
+
+fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
+    alt((
+        map(tag("is-null"), |_| Ok(Transformer::IsNull)),
+        map(tag("is-not-null"), |_| Ok(Transformer::IsNotNull)),
+        map(tag("length"), |_| Ok(Transformer::Length)),
+        map(tuple((tag_whitespace("get"), digit1)), |(_, digits)| {
+            Ok(Transformer::GetIdx(
+                digits.parse().map_err(|err| format!("{}", err))?,
+            ))
+        }),
+        map(
+            tuple((tag_whitespace("get"), escaped_string)),
+            |(_, string)| Ok(Transformer::Get(string)),
+        ),
+        map(tag("flatten"), |_| Ok(Transformer::Flatten)),
+        map(
+            tuple((
+                tag_whitespace("each"),
+                tag_whitespace("("),
+                transformer,
+                tag(")"),
+            )),
+            |(_, _, transformer, _)| Ok(Transformer::Each(Box::new(transformer?))),
+        ),
+        map(
+            tuple((tag_whitespace("capture"), escaped_string)),
+            |(_, regexp)| Ok(Transformer::Capture(regex(&regexp)?)),
+        ),
+        map(
+            tuple((tag_whitespace("all-captures"), escaped_string)),
+            |(_, regexp)| Ok(Transformer::AllCaptures(regex(&regexp)?)),
+        ),
+    ))(i)
+}
+
+#[test]
+fn transformer_test() {
+    // No `PartialEq` for me.
+    match transformer("capture \n\t \"$(:!?foo)*\"")
+        .unwrap()
+        .1
+        .unwrap()
+    {
+        Transformer::Capture(regex) => assert_eq!(
+            Regex::from_str("$(:!?foo)*").unwrap().as_str(),
+            regex.as_str()
+        ),
+        e => panic!("got {:?}", e),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Extractor {
     Name,
     Text,
-    Capture(Regex),
-    AllCaptures(Regex),
+    // Capture(Regex),
+    // AllCaptures(Regex),
     Html,
     InnerHtml,
-    Hash,
+    // Hash,
     Attr(String),
 }
 
 #[derive(Debug, Clone)]
-pub enum Aggregator {
-    Count,
-    First(Extractor),
-    Collect(Extractor),
+pub struct ExtractorExpression {
+    pub extractor: Extractor,
+    pub transformers: Vec<Transformer>,
 }
 
 fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
     alt((
         map(tag("name"), |_| Ok(Extractor::Name)),
         map(tag("text"), |_| Ok(Extractor::Text)),
-        map(
-            tuple((tag_whitespace("capture"), escaped_string)),
-            |(_, regexp)| Ok(Extractor::Capture(regex(&regexp)?)),
-        ),
-        map(
-            tuple((tag_whitespace("all-captures"), escaped_string)),
-            |(_, regexp)| Ok(Extractor::AllCaptures(regex(&regexp)?)),
-        ),
         map(tag("html"), |_| Ok(Extractor::Html)),
         map(tag("inner-html"), |_| Ok(Extractor::InnerHtml)),
-        map(tag("hash"), |_| Ok(Extractor::Hash)),
         map(
             tuple((tag_whitespace("attr"), escaped_string)),
             |(_, attr)| Ok(Extractor::Attr(attr.to_owned())),
@@ -256,44 +311,119 @@ fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
 
 #[test]
 fn extractor_test() {
-    // No `PartialEq` for me.
-    match extractor("capture \n\t \"$(:!?foo)*\"").unwrap().1.unwrap() {
-        Extractor::Capture(regex) => assert_eq!(
-            Regex::from_str("$(:!?foo)*").unwrap().as_str(),
-            regex.as_str()
-        ),
-        e => panic!("got {:?}", e),
-    }
+    // // No `PartialEq` for me.
+    // match extractor("capture \n\t \"$(:!?foo)*\"").unwrap().1.unwrap() {
+    //     Extractor::Capture(regex) => assert_eq!(
+    //         Regex::from_str("$(:!?foo)*").unwrap().as_str(),
+    //         regex.as_str()
+    //     ),
+    //     e => panic!("got {:?}", e),
+    // }
+}
+
+fn extractor_expression(i: &str) -> IResult<&str, Result<ExtractorExpression, String>> {
+    map(
+        tuple((
+            extractor,
+            whitespace,
+            separated_list(whitespace, transformer),
+        )),
+        |(extractor, _, transformers)| {
+            Ok(ExtractorExpression {
+                extractor: extractor?,
+                transformers: transformers.into_iter().collect::<Result<Vec<_>, _>>()?,
+            })
+        },
+    )(i)
+}
+
+#[test]
+fn extractor_expression_test() {
+    unimplemented!();
+}
+
+#[derive(Debug, Clone)]
+pub enum Aggregator {
+    Count,
+    CountNotNull(ExtractorExpression),
+    First(ExtractorExpression),
+    Collect(ExtractorExpression),
+}
+
+#[derive(Debug, Clone)]
+pub struct AggregatorExpression {
+    pub aggregator: Aggregator,
+    pub transformers: Vec<Transformer>,
 }
 
 fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
     alt((
+        map(
+            tuple((
+                tag_whitespace("count"),
+                tag_whitespace("("),
+                extractor_expression,
+                tag_whitespace(")"),
+            )),
+            |(_, _, extractor, _)| Ok(Aggregator::CountNotNull(extractor?)),
+        ),
         map(tag("count"), |_| Ok(Aggregator::Count)),
         map(
-            tuple((tag_whitespace("first"), extractor)),
-            |(_, extractor)| Ok(Aggregator::First(extractor?)),
+            tuple((
+                tag_whitespace("first"),
+                tag_whitespace("("),
+                extractor_expression,
+                tag_whitespace(")"),
+            )),
+            |(_, _, extractor, _)| Ok(Aggregator::First(extractor?)),
         ),
         map(
-            tuple((tag_whitespace("collect"), extractor)),
-            |(_, extractor)| Ok(Aggregator::Collect(extractor?)),
+            tuple((
+                tag_whitespace("collect"),
+                tag_whitespace("("),
+                extractor_expression,
+                tag_whitespace(")"),
+            )),
+            |(_, _, extractor, _)| Ok(Aggregator::Collect(extractor?)),
         ),
     ))(i)
 }
 
 #[test]
 fn aggregator_test() {
-    // No `PartialEq` for me.
-    match aggregator("first capture \n\t \"$(:!?foo)*\"")
-        .unwrap()
-        .1
-        .unwrap()
-    {
-        Aggregator::First(Extractor::Capture(regex)) => assert_eq!(
-            Regex::from_str("$(:!?foo)*").unwrap().as_str(),
-            regex.as_str()
-        ),
-        e => panic!("got {:?}", e),
-    }
+    // // No `PartialEq` for me.
+    // match aggregator("first capture \n\t \"$(:!?foo)*\"")
+    //     .unwrap()
+    //     .1
+    //     .unwrap()
+    // {
+    //     Aggregator::First(Extractor::Capture(regex)) => assert_eq!(
+    //         Regex::from_str("$(:!?foo)*").unwrap().as_str(),
+    //         regex.as_str()
+    //     ),
+    //     e => panic!("got {:?}", e),
+    // }
+}
+
+fn aggregator_expression(i: &str) -> IResult<&str, Result<AggregatorExpression, String>> {
+    map(
+        tuple((
+            aggregator,
+            whitespace,
+            separated_list(whitespace, transformer),
+        )),
+        |(aggregator, _, transformers)| {
+            Ok(AggregatorExpression {
+                aggregator: aggregator?,
+                transformers: transformers.into_iter().collect::<Result<Vec<_>, _>>()?,
+            })
+        },
+    )(i)
+}
+
+#[test]
+fn aggregator_expression_test() {
+    unimplemented!();
 }
 
 fn in_directive(i: &str) -> IResult<&str, Result<Regex, String>> {
@@ -356,7 +486,7 @@ fn flag_directive_test() {
 pub struct RuleSet {
     pub in_page: Option<Regex>,
     pub selector: scraper::Selector,
-    pub aggregators: HashMap<String, Aggregator>,
+    pub aggregators: HashMap<String, AggregatorExpression>,
 }
 
 fn rule_set(i: &str) -> IResult<&str, Result<RuleSet, String>> {
@@ -367,7 +497,7 @@ fn rule_set(i: &str) -> IResult<&str, Result<RuleSet, String>> {
                 opt(trailing_whitespace(in_directive)),
                 |i| css_selector(i, '{'),
             )),
-            identified_value(aggregator),
+            identified_value(aggregator_expression),
         ),
         |((_, in_page, selector), aggregator_list)| {
             let mut aggregators = HashMap::new();
