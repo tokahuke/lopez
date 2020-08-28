@@ -30,11 +30,11 @@ This method should work on any Unix-based system; there is an [open issue](https
 
 ## Running the damn thing
 
-If you installed from the `entalator`, you are ready to go. However, if you insist on using the source code, you will need Rust Ecosystem, which is easy to install. Just go to https://rust-lang.org/tools/install and follow the instructions. After that, go the `lopez` folder and run:
-``` bash
-cargo run --release -- --help
+If you installed from the `entalator`, you will have the binary `lopez` available globally on your machine. To get started, run
+```bash
+lopez --help
 ```
-To get some help on Command Line Interface usage.
+to get a friendly help dialog. This will list your options while running Lopez. To really get started running lopez, see our Quickstart guide.
 
 ## Lopez Crawl Directives
 
