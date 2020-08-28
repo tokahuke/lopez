@@ -64,6 +64,13 @@ styles [] {
    pygments_scope        = Name.Function
 }
 
+.ruleset_transformer : style {
+   color     = gold
+   ace_scope             = entity.name.function
+   textmate_scope        = entity.name.function
+   pygments_scope        = Name.Function
+}
+
 .rule_name : style {
    color                 = cyan
    ace_scope             = entity.other.attribute-name
@@ -256,12 +263,16 @@ keywords : context {
 
 ruleset_namespace : context {
    : pattern {
-      regex \= (first|collect|count)
+      regex \= (first|collect|count|sum)
       styles[] = .ruleset_aggregator;
    }
    : pattern {
-      regex \= (name|text|capture|all-captures|html|inner-html|attr)
+      regex \= (name|text|html|inner-html|attr)
       styles[] = .ruleset_extractor;
+   }
+   : pattern {
+      regex \= (is-null|is-not-null|length|hash|get|flatten|each|capture|all-captures)
+      styles[] = .ruleset_transformer;
    }
 }
 
