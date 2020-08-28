@@ -306,13 +306,19 @@
       <array> 
         <dict>
           <key>match</key>
-          <string>(first|collect|count)</string>
+          <string>(first|collect|count|sum)</string>
           <key>name</key>
           <string>entity.name.function.lcd</string>
         </dict>
         <dict>
           <key>match</key>
-          <string>(name|text|capture|all-captures|html|inner-html|attr)</string>
+          <string>(name|text|html|inner-html|attr)</string>
+          <key>name</key>
+          <string>entity.name.function.lcd</string>
+        </dict>
+        <dict>
+          <key>match</key>
+          <string>(is-null|is-not-null|length|hash|get|flatten|each|capture|all-captures)</string>
           <key>name</key>
           <string>entity.name.function.lcd</string>
         </dict>
