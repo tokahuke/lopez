@@ -547,7 +547,7 @@ impl Analyzer {
             .iter()
             .filter(|(_, rule_set)| {
                 if let Some(regex) = &rule_set.in_page {
-                    !regex.is_match(url.as_str())
+                    regex.is_match(url.as_str())
                 } else {
                     true
                 }

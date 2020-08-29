@@ -35,7 +35,7 @@ If you installed from the `entalator`, you will have the binary `lopez` availabl
 ```bash
 lopez --help
 ```
-to get a friendly help dialog. This will list your options while running Lopez. To really get started running lopez, see our Quickstart guide.
+to get a friendly help dialog. This will list your options while running Lopez. To really get started running lopez, see our [Quickstart guide](https://github.com/tokahuke/lopez/wiki/Quickstart).
 
 ## Lopez Crawl Directives
 
