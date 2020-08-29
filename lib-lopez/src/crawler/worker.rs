@@ -227,8 +227,8 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                 let chunk = chunk?;
                 let max_body_size = self
                     .variables
-                    .get_as_usize(Variable::MaxBodySize)
-                    .expect("bad val");
+                    .get_as_u64(Variable::MaxBodySize)
+                    .expect("bad val") as usize;
                 if content.len() + chunk.len() > max_body_size {
                     log::warn!("at {}: Got very big body. Truncating...", page_url);
 
