@@ -22,7 +22,7 @@ pub enum Error {
     #[fail(display = "bad set-variable value for {}: {:?}", _0, _1)]
     BadSetVariableValue(crate::directives::Variable, crate::directives::Literal),
     #[fail(display = "type error: no type for `{}` of `{}`", _0, _1)]
-    TypeError(crate::directives::Transformer, crate::directives::Type),
+    TypeError(String, crate::directives::Type),
     #[fail(display = "{}", _0)]
     Custom(String),
 }

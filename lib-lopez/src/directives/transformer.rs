@@ -1,6 +1,8 @@
 use regex::{Captures, Regex};
-use serde_json::{Map, Value, Number};
+use serde_json::{Map, Value};
 use std::fmt;
+
+use super::value_ext::force_f64;
 
 /// Puts captures into a nice JSON.
 fn capture_json(regex: &Regex, captures: Captures) -> Map<String, Value> {
@@ -19,14 +21,6 @@ fn capture_json(regex: &Regex, captures: Captures) -> Map<String, Value> {
             })
         })
         .collect::<Map<String, Value>>()
-}
-
-/// The funny way I have to get a f64 from a `Number`. This is a lossy conversion.
-fn force_f64(num: &Number) -> f64 {
-    num.as_f64()
-        .or_else(|| num.as_i64().map(|num| num as f64))
-        .or_else(|| num.as_u64().map(|num| num as f64))
-        .expect("all cases covered")
 }
 
 #[derive(Debug, Clone)]
@@ -71,8 +65,8 @@ pub enum Transformer {
     Get(String),
     GetIdx(usize),
     Flatten,
-    Each(Box<Transformer>),
-    Filter(Box<Transformer>),
+    Each(TransformerExpression),
+    Filter(TransformerExpression),
 
     // Regex:
     Capture(Regex),
@@ -103,49 +97,53 @@ impl fmt::Display for Transformer {
 }
 
 impl Transformer {
-    pub fn type_for(&self, input: &Type) -> Option<Type> {
+    fn type_error<T>(&self, input: &Type) -> Result<T, crate::Error> {
+        Err(crate::Error::TypeError(self.to_string(), input.clone()))
+    }
+
+    pub fn type_for(&self, input: &Type) -> Result<Type, crate::Error> {
         match (self, input) {
-            (Transformer::IsNull, _) => Some(Type::Bool),
-            (Transformer::IsNotNull, _) => Some(Type::Bool),
-            (Transformer::Hash, Type::String) => Some(Type::Number),
-            (Transformer::AsNumber, Type::String) => Some(Type::Number),
-            (Transformer::GreaterThan(_), Type::Number) => Some(Type::Bool),
-            (Transformer::LesserThan(_), Type::Number) => Some(Type::Bool),
-            (Transformer::Equals(_), Type::Number) => Some(Type::Bool),
-            (Transformer::Length, Type::String) => Some(Type::Number),
-            (Transformer::Length, Type::Array(_)) => Some(Type::Number),
-            (Transformer::Length, Type::Map(_)) => Some(Type::Number),
-            (Transformer::IsEmpty, Type::String) => Some(Type::Bool),
-            (Transformer::IsEmpty, Type::Array(_)) => Some(Type::Bool),
-            (Transformer::IsEmpty, Type::Map(_)) => Some(Type::Bool),
-            (Transformer::Get(_), Type::Map(typ)) => Some(Type::clone(&*typ)),
-            (Transformer::GetIdx(_), Type::Array(typ)) => Some(Type::clone(&*typ)),
+            (Transformer::IsNull, _) => Ok(Type::Bool),
+            (Transformer::IsNotNull, _) => Ok(Type::Bool),
+            (Transformer::Hash, Type::String) => Ok(Type::Number),
+            (Transformer::AsNumber, Type::String) => Ok(Type::Number),
+            (Transformer::GreaterThan(_), Type::Number) => Ok(Type::Bool),
+            (Transformer::LesserThan(_), Type::Number) => Ok(Type::Bool),
+            (Transformer::Equals(_), Type::Number) => Ok(Type::Bool),
+            (Transformer::Length, Type::String) => Ok(Type::Number),
+            (Transformer::Length, Type::Array(_)) => Ok(Type::Number),
+            (Transformer::Length, Type::Map(_)) => Ok(Type::Number),
+            (Transformer::IsEmpty, Type::String) => Ok(Type::Bool),
+            (Transformer::IsEmpty, Type::Array(_)) => Ok(Type::Bool),
+            (Transformer::IsEmpty, Type::Map(_)) => Ok(Type::Bool),
+            (Transformer::Get(_), Type::Map(typ)) => Ok(Type::clone(&*typ)),
+            (Transformer::GetIdx(_), Type::Array(typ)) => Ok(Type::clone(&*typ)),
             (Transformer::Flatten, Type::Array(inner)) => {
                 if let Type::Array(_) = &**inner {
-                    Some(Type::clone(&*inner))
+                    Ok(Type::clone(&*inner))
                 } else {
-                    None
+                    self.type_error(input)
                 }
             }
             (Transformer::Each(inner), Type::Array(typ)) => {
-                Some(Type::Array(Box::new(inner.type_for(typ)?)))
+                Ok(Type::Array(Box::new(inner.type_for(typ)?)))
             }
             (Transformer::Filter(inner), Type::Array(typ)) => {
-               if let Some(Type::Bool) = inner.type_for(typ) {
-                    Some(Type::clone(typ))
-               } else {
-                   None
-               }
+                if let Ok(Type::Bool) = inner.type_for(typ) {
+                    Ok(Type::clone(typ))
+                } else {
+                    self.type_error(input)
+                }
             }
-            (Transformer::Capture(_), Type::String) => Some(Type::Map(Box::new(Type::String))),
+            (Transformer::Capture(_), Type::String) => Ok(Type::Map(Box::new(Type::String))),
             (Transformer::AllCaptures(_), Type::String) => {
-                Some(Type::Array(Box::new(Type::Map(Box::new(Type::String)))))
+                Ok(Type::Array(Box::new(Type::Map(Box::new(Type::String)))))
             }
-            (_, _) => None,
+            (_, _) => self.type_error(input),
         }
     }
 
-    // #[track_caller]
+    #[track_caller]
     fn complain_about(&self, value: &Value) -> ! {
         panic!("type checked: {:?} {:?}", self, value)
     }
@@ -180,11 +178,9 @@ impl Transformer {
             (Transformer::Flatten, Value::Array(array)) => {
                 let flattened = array
                     .into_iter()
-                    .flat_map(|element| {
-                        match element {
-                            Value::Array(array) => array,
-                            value => self.complain_about(&value),
-                        }
+                    .flat_map(|element| match element {
+                        Value::Array(array) => array,
+                        value => self.complain_about(&value),
                     })
                     .collect::<Vec<_>>();
 
@@ -197,12 +193,10 @@ impl Transformer {
                 .into(),
             (Transformer::Filter(inner), Value::Array(array)) => array
                 .into_iter()
-                .filter_map(|value| {
-                    match inner.eval(value.clone()) {
-                        Value::Null | Value::Bool(false) => None,
-                        Value::Bool(true) => Some(value),
-                        value => self.complain_about(&value),
-                    }
+                .filter_map(|value| match inner.eval(value.clone()) {
+                    Value::Null | Value::Bool(false) => None,
+                    Value::Bool(true) => Some(value),
+                    value => self.complain_about(&value),
                 })
                 .collect::<Vec<_>>()
                 .into(),
@@ -218,5 +212,50 @@ impl Transformer {
             (_, Value::Null) => Value::Null,
             (transformer, value) => panic!("type checked: {:?} {:?}", transformer, value),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TransformerExpression {
+    pub transformers: Vec<Transformer>,
+}
+
+impl fmt::Display for TransformerExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut iter = self.transformers.iter();
+
+        if let Some(transformer) = iter.next() {
+            write!(f, "{}", transformer)?;
+        }
+
+        for transformer in iter {
+            write!(f, " {}", transformer)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl TransformerExpression {
+    pub fn is_empty(&self) -> bool {
+        self.transformers.is_empty()
+    }
+
+    pub fn type_for(&self, input: &Type) -> Result<Type, crate::Error> {
+        let mut typ = input.clone();
+
+        for transformer in &self.transformers {
+            typ = transformer.type_for(&typ)?;
+        }
+
+        Ok(typ)
+    }
+
+    pub fn eval(&self, mut value: Value) -> Value {
+        for transformer in &self.transformers {
+            value = transformer.eval(value);
+        }
+
+        value
     }
 }
