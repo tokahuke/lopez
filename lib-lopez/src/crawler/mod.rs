@@ -54,9 +54,8 @@ pub async fn start<B: Backend>(
         .count_crawled()
         .await
         .map_err(|err| err.into())?;
-    let remaining_quota = variables
-        .get_as_usize(Variable::Quota)?
-        .saturating_sub(consumed);
+    let remaining_quota =
+        (variables.get_as_u64(Variable::Quota)? as usize).saturating_sub(consumed);
 
     // Spawn task that will log stats from time to time:
     let _stats_handle = tokio::spawn(log_stats(
@@ -121,7 +120,7 @@ pub async fn start<B: Backend>(
         match master_model
             .fetch(
                 profile.batch_size as i64,
-                variables.get_as_usize(Variable::MaxDepth)? as i16,
+                variables.get_as_u64(Variable::MaxDepth)? as i16,
             )
             .await
         {

@@ -2,8 +2,8 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag},
     character::complete::{anychar, digit1, multispace1},
-    combinator::{all_consuming, map, opt},
-    multi::many0,
+    combinator::{all_consuming, map, map_res, opt},
+    multi::{many0, separated_list},
     number::complete::double,
     sequence::{delimited, tuple},
     IResult,
@@ -713,16 +713,24 @@ fn boundary_test() {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
-    String(String),
-    Number(f64),
-}
-
-fn literal(i: &str) -> IResult<&str, Literal> {
+fn literal(i: &str) -> IResult<&str, Value> {
     alt((
-        map(escaped_string, |string| Literal::String(string)),
-        map(double, |number| Literal::Number(number)),
+        map(escaped_string, |string| Value::String(string)),
+        map_res(digit1, |number: &str| {
+            number.parse::<u64>().map(|num| num.into())
+        }),
+        map_res(tuple((tag("-"), digit1)), |(_, number): (_, &str)| {
+            number.parse::<u64>().map(|num| num.into())
+        }),
+        map(double, |number| number.into()),
+        map(
+            tuple((
+                tag_whitespace("["),
+                separated_list(tag_whitespace(","), literal),
+                tag("]"),
+            )),
+            |(_, array, _)| Value::Array(array),
+        ),
     ))(i)
 }
 
@@ -730,16 +738,16 @@ fn literal(i: &str) -> IResult<&str, Literal> {
 fn literal_test() {
     assert_eq!(
         literal("\"a string\""),
-        Ok(("", Literal::String("a string".to_owned())))
+        Ok(("", Value::String("a string".to_owned())))
     );
-    assert_eq!(literal("1.234"), Ok(("", Literal::Number(1.234))));
-    assert_eq!(literal("1234"), Ok(("", Literal::Number(1234.0))));
+    assert_eq!(literal("1.234"), Ok(("", 1.234.into())));
+    assert_eq!(literal("1234"), Ok(("", 1234.into())));
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SetVariable {
     pub name: String,
-    pub value: Literal,
+    pub value: Value,
 }
 
 fn set_variable(i: &str) -> IResult<&str, SetVariable> {
@@ -766,7 +774,7 @@ fn set_variable_test() {
             "",
             SetVariable {
                 name: "a_variable".to_owned(),
-                value: Literal::String("a value".to_owned())
+                value: Value::String("a value".to_owned())
             }
         ))
     );
@@ -776,7 +784,7 @@ fn set_variable_test() {
             "",
             SetVariable {
                 name: "a_variable".to_owned(),
-                value: Literal::Number(1.234),
+                value: 1.234.into(),
             }
         ))
     );
@@ -786,7 +794,7 @@ fn set_variable_test() {
             "",
             SetVariable {
                 name: "a_variable".to_owned(),
-                value: Literal::Number(1234.0),
+                value: 1234.0.into(),
             }
         ))
     );

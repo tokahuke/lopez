@@ -10,7 +10,7 @@ mod variable;
 
 pub use aggregator::{Aggregator, AggregatorExpression};
 pub use extractor::{Extractor, ExtractorExpression};
-pub use parse::{Boundary, Item, Literal, RuleSet};
+pub use parse::{Boundary, Item, RuleSet};
 pub use transformer::{Transformer, TransformerExpression, Type};
 pub use variable::{SetVariables, Variable};
 
@@ -260,13 +260,13 @@ impl Directives {
         let variables = self.set_variables();
         let tests = vec![
             variables.get_as_str(Variable::UserAgent).err(),
-            variables.get_as_usize(Variable::Quota).err(),
-            variables.get_as_usize(Variable::MaxDepth).err(),
+            variables.get_as_u64(Variable::Quota).err(),
+            variables.get_as_u64(Variable::MaxDepth).err(),
             variables.get_as_positive_f64(Variable::MaxHitsPerSec).err(),
             variables
                 .get_as_positive_f64(Variable::RequestTimeout)
                 .err(),
-            variables.get_as_usize(Variable::MaxBodySize).err(),
+            variables.get_as_u64(Variable::MaxBodySize).err(),
         ];
 
         tests
@@ -487,7 +487,7 @@ impl Directives {
                     }
                 })
             })
-            .collect::<BTreeMap<Variable, Literal>>();
+            .collect::<BTreeMap<Variable, Value>>();
 
         SetVariables { set_variables }
     }

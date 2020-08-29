@@ -66,7 +66,7 @@ pub async fn log_stats(
 
         let mut interval =
             tokio::time::interval(tokio::time::Duration::from_secs_f64(log_interval));
-        let quota = variables.get_as_usize(Variable::Quota).expect("bad val");
+        let quota = variables.get_as_u64(Variable::Quota).expect("bad val") as usize;
         let mut tracker = StatsTracker::new(already_done, quota, counter, log_interval);
 
         loop {
