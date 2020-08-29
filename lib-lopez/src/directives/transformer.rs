@@ -23,6 +23,60 @@ fn capture_json(regex: &Regex, captures: Captures) -> Map<String, Value> {
         .collect::<Map<String, Value>>()
 }
 
+/// Prettifies text, removing unnecessary whitespace.
+fn pretty(i: &str) -> String {
+    let stream = i.split('\n').map(|paragraph| {
+        paragraph
+            .split_whitespace()
+            .map(|word| word.trim())
+            .filter(|word| !word.is_empty())
+    });
+    let mut pretty = String::with_capacity(i.len());
+    let mut p_sep = None;
+
+    for chunks in stream {
+        if let Some(p_sep) = p_sep {
+            pretty += p_sep;
+        }
+
+        let mut sep = None;
+
+        for chunk in chunks {
+            if let Some(sep) = sep {
+                pretty += sep;
+            }
+
+            pretty += chunk;
+
+            sep = Some(" ");
+        }
+
+        p_sep = if sep.is_some() { Some("\n") } else { None };
+    }
+
+    // Post-process:
+    if !pretty.is_empty() && !pretty.ends_with('\n') {
+        pretty += "\n";
+    }
+
+    pretty
+}
+
+#[test]
+fn pretty_test() {
+    let ugly = "\n\n\n\n\t    \r\r\n\n ";
+    assert_eq!("", pretty(ugly));
+
+    let ugly = "\n\na\n\n\t    \r\rb\n\n ";
+    assert_eq!("a\nb\n", pretty(ugly));
+
+    let ugly = "\n\n\na\n\t    \r\r\n\n ";
+    assert_eq!("a\n", pretty(ugly));
+
+    let ugly = "\n\n\na\n\t    \r\r\n\n c";
+    assert_eq!("a\nc\n", pretty(ugly));
+}
+
 #[derive(Debug, Clone)]
 pub enum Type {
     Any,
@@ -68,6 +122,9 @@ pub enum Transformer {
     Each(TransformerExpression),
     Filter(TransformerExpression),
 
+    // String specific
+    Pretty,
+
     // Regex:
     Capture(Regex),
     AllCaptures(Regex),
@@ -91,6 +148,7 @@ impl fmt::Display for Transformer {
             Transformer::Each(transformer) => write!(f, "each({})", transformer),
             Transformer::Filter(transformer) => write!(f, "filter({})", transformer),
             Transformer::Capture(regex) => write!(f, "capture {:?}", regex.as_str()),
+            Transformer::Pretty => write!(f, "pretty"),
             Transformer::AllCaptures(regex) => write!(f, "all-captures {:?}", regex.as_str()),
         }
     }
@@ -135,6 +193,7 @@ impl Transformer {
                     self.type_error(input)
                 }
             }
+            (Transformer::Pretty, Type::String) => Ok(Type::String),
             (Transformer::Capture(_), Type::String) => Ok(Type::Map(Box::new(Type::String))),
             (Transformer::AllCaptures(_), Type::String) => {
                 Ok(Type::Array(Box::new(Type::Map(Box::new(Type::String)))))
@@ -200,6 +259,7 @@ impl Transformer {
                 })
                 .collect::<Vec<_>>()
                 .into(),
+            (Transformer::Pretty, Value::String(string)) => pretty(&string).into(),
             (Transformer::Capture(regex), Value::String(string)) => regex
                 .captures(&string)
                 .map(|captures| capture_json(&regex, captures).into())

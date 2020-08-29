@@ -1,5 +1,5 @@
 use scraper::ElementRef;
-use serde_json::{to_value, Map, Value};
+use serde_json::{Map, Value};
 use std::fmt;
 
 use super::transformer::{TransformerExpression, Type};
@@ -15,6 +15,10 @@ pub enum Extractor {
     Attrs,
     Classes,
     Id,
+    Parent(Box<Extractor>),
+    Children(Box<Extractor>),
+    SelectAny(Box<Extractor>, scraper::Selector),
+    SelectAll(Box<Extractor>, scraper::Selector),
 }
 
 impl fmt::Display for Extractor {
@@ -28,6 +32,14 @@ impl fmt::Display for Extractor {
             Extractor::Attrs => write!(f, "attrs"),
             Extractor::Classes => write!(f, "classes"),
             Extractor::Id => write!(f, "id"),
+            Extractor::Parent(parent) => write!(f, "parent({})", parent),
+            Extractor::Children(children) => write!(f, "children({})", children),
+            Extractor::SelectAny(select_any, extractor) => {
+                write!(f, "select-any({}, {:?})", select_any, extractor)
+            } // TODO: display correctly.
+            Extractor::SelectAll(select_all, extractor) => {
+                write!(f, "select-any({}, {:?})", select_all, extractor)
+            } // TODO: display correctly.
         }
     }
 }
@@ -43,27 +55,58 @@ impl Extractor {
             Extractor::Attrs => Type::Map(Box::new(Type::String)),
             Extractor::Classes => Type::Array(Box::new(Type::String)),
             Extractor::Id => Type::String,
+            Extractor::Parent(parent) => parent.type_of(),
+            Extractor::Children(children) => Type::Array(Box::new(children.type_of())),
+            Extractor::SelectAny(extractor, _) => extractor.type_of(),
+            Extractor::SelectAll(extractor, _) => Type::Array(Box::new(extractor.type_of())),
         }
     }
 
     pub fn extract(&self, element_ref: ElementRef) -> Value {
         match self {
-            Extractor::Name => to_value(element_ref.value().name()),
-            Extractor::Html => to_value(element_ref.html()),
-            Extractor::InnerHtml => to_value(element_ref.inner_html()),
-            Extractor::Text => to_value(element_ref.text().collect::<Vec<_>>().join(" ")),
-            Extractor::Attr(attr) => to_value(element_ref.value().attr(attr)),
-            Extractor::Attrs => to_value(
-                element_ref
-                    .value()
-                    .attrs()
-                    .map(|(key, value)| (key.to_owned(), value.to_owned().into()))
-                    .collect::<Map<_, _>>(),
-            ),
-            Extractor::Classes => to_value(element_ref.value().classes().collect::<Vec<_>>()),
-            Extractor::Id => to_value(element_ref.value().id()),
+            Extractor::Name => element_ref.value().name().into(),
+            Extractor::Html => element_ref.html().into(),
+            Extractor::InnerHtml => element_ref.inner_html().into(),
+            Extractor::Text => element_ref.text().collect::<Vec<_>>().join(" ").into(),
+            Extractor::Attr(attr) => element_ref
+                .value()
+                .attr(attr)
+                .map(|value| value.into())
+                .unwrap_or(Value::Null),
+            Extractor::Attrs => element_ref
+                .value()
+                .attrs()
+                .map(|(key, value)| (key.to_owned(), value.to_owned().into()))
+                .collect::<Map<_, _>>()
+                .into(),
+            Extractor::Classes => element_ref.value().classes().collect::<Vec<_>>().into(),
+            Extractor::Id => element_ref
+                .value()
+                .id()
+                .map(|id| id.into())
+                .unwrap_or(Value::Null),
+            Extractor::Parent(parent) => element_ref
+                .parent()
+                .and_then(|node_ref| ElementRef::wrap(node_ref))
+                .map(|element_ref| parent.extract(element_ref))
+                .unwrap_or(Value::Null),
+            Extractor::Children(children) => element_ref
+                .children()
+                .filter_map(|node_ref| ElementRef::wrap(node_ref))
+                .map(|element_ref| children.extract(element_ref))
+                .collect::<Vec<_>>()
+                .into(),
+            Extractor::SelectAny(extractor, selector) => element_ref
+                .select(selector)
+                .next()
+                .map(|element_ref| extractor.extract(element_ref))
+                .unwrap_or(Value::Null),
+            Extractor::SelectAll(extractor, selector) => element_ref
+                .select(selector)
+                .map(|element_ref| extractor.extract(element_ref))
+                .collect::<Vec<_>>()
+                .into(),
         }
-        .expect("can always serialize")
     }
 }
 

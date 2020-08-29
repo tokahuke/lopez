@@ -198,27 +198,31 @@ fn block_test() {
     );
 }
 
-fn css_selector(i: &str, boundary_hint: char) -> IResult<&str, Result<scraper::Selector, String>> {
-    let mut level = 0;
-    let mut idx = 0;
+fn css_selector(
+    boundary_hint: char,
+) -> impl Fn(&str) -> IResult<&str, Result<scraper::Selector, String>> {
+    move |i: &str| {
+        let mut level = 0;
+        let mut idx = 0;
 
-    while idx < i.len() && (level != 0 || !i[idx..].starts_with(boundary_hint)) {
-        if i[idx..].starts_with('[') {
-            level += 1;
-        } else if i[idx..].starts_with(']') {
-            level -= 1;
+        while idx < i.len() && (level != 0 || !i[idx..].starts_with(boundary_hint)) {
+            if i[idx..].starts_with('[') {
+                level += 1;
+            } else if i[idx..].starts_with(']') {
+                level -= 1;
+            }
+
+            idx += 1;
         }
 
-        idx += 1;
-    }
-
-    if idx == 0 {
-        Err(nom::Err::Error((i, nom::error::ErrorKind::IsA)))
-    } else {
-        Ok((
-            &i[idx..],
-            scraper::Selector::parse(&i[..idx]).map_err(|err| format!("{:?}", err)),
-        ))
+        if idx == 0 {
+            Err(nom::Err::Error((i, nom::error::ErrorKind::IsA)))
+        } else {
+            Ok((
+                &i[idx..],
+                scraper::Selector::parse(&i[..idx]).map_err(|err| format!("{:?}", err)),
+            ))
+        }
     }
 }
 
@@ -226,7 +230,7 @@ fn css_selector(i: &str, boundary_hint: char) -> IResult<&str, Result<scraper::S
 fn css_selector_test() {
     let selector = scraper::Selector::parse("div > a + button[foo$=\"bar{\" i]").unwrap();
     assert_eq!(
-        css_selector("div > a + button[foo$=\"bar{\" i]{ haha-hoho!", '{'),
+        css_selector('{')("div > a + button[foo$=\"bar{\" i]{ haha-hoho!"),
         Ok(("{ haha-hoho!", Ok(selector)))
     );
 }
@@ -276,6 +280,7 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
             )),
             |(_, _, transformer_expression, _)| Ok(Transformer::Filter(transformer_expression?)),
         ),
+        map(tag("pretty"), |_| Ok(Transformer::Pretty)),
         map(
             tuple((tag_whitespace("capture"), escaped_string)),
             |(_, regexp)| Ok(Transformer::Capture(regex(&regexp)?)),
@@ -323,6 +328,50 @@ fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
         map(
             tuple((tag_whitespace("attr"), escaped_string)),
             |(_, attr)| Ok(Extractor::Attr(attr.to_owned())),
+        ),
+        map(
+            tuple((
+                tag_whitespace("parent"),
+                tag_whitespace("("),
+                extractor,
+                tag(")"),
+            )),
+            |(_, _, extractor, _)| Ok(Extractor::Parent(Box::new(extractor?))),
+        ),
+        map(
+            tuple((
+                tag_whitespace("children"),
+                tag_whitespace("("),
+                extractor,
+                tag(")"),
+            )),
+            |(_, _, extractor, _)| Ok(Extractor::Children(Box::new(extractor?))),
+        ),
+        map(
+            tuple((
+                tag_whitespace("select-any"),
+                tag_whitespace("("),
+                extractor,
+                tag_whitespace(","),
+                css_selector(')'),
+                tag(")"),
+            )),
+            |(_, _, extractor, _, selector, _)| {
+                Ok(Extractor::SelectAny(Box::new(extractor?), selector?))
+            },
+        ),
+        map(
+            tuple((
+                tag_whitespace("select-all"),
+                tag_whitespace("("),
+                extractor,
+                tag_whitespace(","),
+                css_selector(')'),
+                tag(")"),
+            )),
+            |(_, _, extractor, _, selector, _)| {
+                Ok(Extractor::SelectAll(Box::new(extractor?), selector?))
+            },
         ),
     ))(i)
 }
@@ -573,7 +622,7 @@ fn rule_set(i: &str) -> IResult<&str, Result<RuleSet, String>> {
             tuple((
                 tag_whitespace("select"),
                 opt(trailing_whitespace(in_directive)),
-                |i| css_selector(i, '{'),
+                css_selector('{'),
             )),
             identified_value(aggregator_expression),
         ),
