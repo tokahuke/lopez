@@ -236,14 +236,18 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
         map(tag("is-null"), |_| Ok(Transformer::IsNull)),
         map(tag("is-not-null"), |_| Ok(Transformer::IsNotNull)),
         map(tag("hash"), |_| Ok(Transformer::Hash)),
-
         map(tag("as-number"), |_| Ok(Transformer::AsNumber)),
-        map(tuple((tag("greater-than"), double)), |(_, lhs)| Ok(Transformer::GreaterThan(lhs))),
-        map(tuple((tag("lesser-than"), double)), |(_, lhs)| Ok(Transformer::LesserThan(lhs))),
-        map(tuple((tag("equals"), double)), |(_, lhs)| Ok(Transformer::Equals(lhs))),
-        
+        map(tuple((tag("greater-than"), double)), |(_, lhs)| {
+            Ok(Transformer::GreaterThan(lhs))
+        }),
+        map(tuple((tag("lesser-than"), double)), |(_, lhs)| {
+            Ok(Transformer::LesserThan(lhs))
+        }),
+        map(tuple((tag("equals"), double)), |(_, lhs)| {
+            Ok(Transformer::Equals(lhs))
+        }),
         map(tag("length"), |_| Ok(Transformer::Length)),
-        map(tag("is-empty"), |_| Ok(Transformer::Length)),
+        map(tag("is-empty"), |_| Ok(Transformer::IsEmpty)),
         map(tuple((tag_whitespace("get"), digit1)), |(_, digits)| {
             Ok(Transformer::GetIdx(
                 digits.parse().map_err(|err| format!("{}", err))?,
@@ -258,21 +262,20 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
             tuple((
                 tag_whitespace("each"),
                 tag_whitespace("("),
-                transformer,
+                transformer_expression,
                 tag(")"),
             )),
-            |(_, _, transformer, _)| Ok(Transformer::Each(Box::new(transformer?))),
+            |(_, _, transformer_expression, _)| Ok(Transformer::Each(transformer_expression?)),
         ),
         map(
             tuple((
                 tag_whitespace("filter"),
                 tag_whitespace("("),
-                transformer,
+                transformer_expression,
                 tag(")"),
             )),
-            |(_, _, transformer, _)| Ok(Transformer::Filter(Box::new(transformer?))),
+            |(_, _, transformer_expression, _)| Ok(Transformer::Filter(transformer_expression?)),
         ),
-
         map(
             tuple((tag_whitespace("capture"), escaped_string)),
             |(_, regexp)| Ok(Transformer::Capture(regex(&regexp)?)),
@@ -300,12 +303,23 @@ fn transformer_test() {
     }
 }
 
+fn transformer_expression(i: &str) -> IResult<&str, Result<TransformerExpression, String>> {
+    map(many0(trailing_whitespace(transformer)), |transformers| {
+        Ok(TransformerExpression {
+            transformers: transformers.into_iter().collect::<Result<Vec<_>, _>>()?,
+        })
+    })(i)
+}
+
 fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
     alt((
         map(tag("name"), |_| Ok(Extractor::Name)),
         map(tag("text"), |_| Ok(Extractor::Text)),
         map(tag("html"), |_| Ok(Extractor::Html)),
         map(tag("inner-html"), |_| Ok(Extractor::InnerHtml)),
+        map(tag("attrs"), |_| Ok(Extractor::Attrs)),
+        map(tag("classes"), |_| Ok(Extractor::Classes)),
+        map(tag("id"), |_| Ok(Extractor::Id)),
         map(
             tuple((tag_whitespace("attr"), escaped_string)),
             |(_, attr)| Ok(Extractor::Attr(attr.to_owned())),
@@ -325,14 +339,11 @@ fn extractor_test() {
 
 fn extractor_expression(i: &str) -> IResult<&str, Result<ExtractorExpression, String>> {
     map(
-        tuple((
-            trailing_whitespace(extractor),
-            many0(trailing_whitespace(transformer)),
-        )),
-        |(extractor, transformers)| {
+        tuple((trailing_whitespace(extractor), transformer_expression)),
+        |(extractor, transformer_expression)| {
             Ok(ExtractorExpression {
                 extractor: extractor?,
-                transformers: transformers.into_iter().collect::<Result<Vec<_>, _>>()?,
+                transformer_expression: transformer_expression?,
             })
         },
     )(i)
@@ -347,7 +358,7 @@ fn extractor_expression_test() {
     {
         ExtractorExpression {
             extractor,
-            transformers,
+            transformer_expression: TransformerExpression { transformers },
         } => {
             assert_eq!(extractor, Extractor::Attr("src".to_owned()));
             assert_eq!(transformers.len(), 1);
@@ -389,6 +400,37 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             )),
             |(_, _, extractor, _)| Ok(Aggregator::Collect(extractor?)),
         ),
+        map(
+            tuple((
+                tag_whitespace("distinct"),
+                tag_whitespace("("),
+                extractor_expression,
+                tag(")"),
+            )),
+            |(_, _, extractor, _)| Ok(Aggregator::Distinct(extractor?)),
+        ),
+        map(
+            tuple((
+                tag_whitespace("sum"),
+                tag_whitespace("("),
+                extractor_expression,
+                tag(")"),
+            )),
+            |(_, _, extractor, _)| Ok(Aggregator::Sum(extractor?)),
+        ),
+        map(
+            tuple((
+                tag_whitespace("group"),
+                tag_whitespace("("),
+                extractor_expression,
+                tag_whitespace(","),
+                aggregator_expression,
+                tag(")"),
+            )),
+            |(_, _, extractor, _, aggregator, _)| {
+                Ok(Aggregator::Group(extractor?, Box::new(aggregator?)))
+            },
+        ),
     ))(i)
 }
 
@@ -402,7 +444,7 @@ fn aggregator_test() {
     {
         Aggregator::First(ExtractorExpression {
             extractor,
-            transformers,
+            transformer_expression: TransformerExpression { transformers },
         }) => {
             assert_eq!(extractor, Extractor::Text);
             assert_eq!(transformers.len(), 1);
@@ -417,15 +459,11 @@ fn aggregator_test() {
 
 fn aggregator_expression(i: &str) -> IResult<&str, Result<AggregatorExpression, String>> {
     map(
-        tuple((
-            aggregator,
-            whitespace,
-            many0(trailing_whitespace(transformer)),
-        )),
-        |(aggregator, _, transformers)| {
+        tuple((aggregator, whitespace, transformer_expression)),
+        |(aggregator, _, transformer_expression)| {
             Ok(AggregatorExpression {
                 aggregator: aggregator?,
-                transformers: transformers.into_iter().collect::<Result<Vec<_>, _>>()?,
+                transformer_expression: transformer_expression?,
             })
         },
     )(i)
@@ -443,9 +481,12 @@ fn aggregator_expression_test() {
             aggregator:
                 Aggregator::First(ExtractorExpression {
                     extractor,
-                    transformers,
+                    transformer_expression: TransformerExpression { transformers },
                 }),
-            transformers: agg_transformers,
+            transformer_expression:
+                TransformerExpression {
+                    transformers: agg_transformers,
+                },
         } => {
             assert_eq!(extractor, Extractor::Text);
             assert_eq!(transformers.len(), 1);

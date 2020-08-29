@@ -2,6 +2,7 @@ mod aggregator;
 mod extractor;
 mod parse;
 mod transformer;
+mod value_ext;
 mod variable;
 
 // Note on where to put parseable items: if it has an impl-block, it goes
@@ -10,7 +11,7 @@ mod variable;
 pub use aggregator::{Aggregator, AggregatorExpression};
 pub use extractor::{Extractor, ExtractorExpression};
 pub use parse::{Boundary, Item, Literal, RuleSet};
-pub use transformer::{Transformer, Type};
+pub use transformer::{Transformer, TransformerExpression, Type};
 pub use variable::{SetVariables, Variable};
 
 use regex::RegexSet;
