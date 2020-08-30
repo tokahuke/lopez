@@ -9,7 +9,7 @@ const LOPEZ_LIB: Dir = include_dir::include_dir!("../std-lopez");
 fn install() -> io::Result<()> {
     let lib_path: PathBuf = "/usr/share/lopez/lib".parse().expect("infallible");
 
-    println!("Installing `lopez` to `/usr/local/bin");
+    println!("Installing `lopez` to `/usr/local/bin`");
 
     fs::write("/usr/local/bin/lopez", LOPEZ_BIN)?;
     fs::set_permissions("/usr/local/bin/lopez", fs::Permissions::from_mode(0o711))?;
