@@ -122,7 +122,7 @@ pub enum Transformer {
     Each(TransformerExpression),
     Filter(TransformerExpression),
 
-    // String specific
+    // String manipulation
     Pretty,
 
     // Regex:

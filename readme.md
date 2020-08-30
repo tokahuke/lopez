@@ -1,7 +1,7 @@
 
 # Welcome to "the Lopez"
 
-Crawling the Web for fun and profit.
+Crawling and scraping the Web for fun and profit.
 
 ## A word of caution
 
@@ -66,7 +66,7 @@ Let's brag a little!
 
 ## Limitations and future plans
 
-* Lopez is still limited to a single machine. No distributed programming yet. However, what are you crawling that requires so much firepower?
+* Lopez is still limited to a single machine. No distributed programming yet. However, what are you scraping that requires so much firepower?
 
 * This crate need more docs and more support for other backends. Sorry, I have a full-time job.
 
