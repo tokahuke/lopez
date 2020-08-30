@@ -122,7 +122,7 @@ pub(crate) enum AggregatorState<'a> {
 impl<'a> AggregatorState<'a> {
     #[track_caller]
     fn complain_about(&self, value: &Value) -> ! {
-        panic!("type checked: {:?} {:?}", self, value)
+        panic!("type checked: {:#?} at {}", self, value)
     }
 
     pub fn new(aggregator: &Aggregator) -> AggregatorState {
@@ -178,7 +178,7 @@ impl<'a> AggregatorState<'a> {
                 for value in extractor.extract(element_ref) {
                     if let Value::Number(num) = value {
                         *sum += force_f64(&num);
-                    } else {
+                    } else if !value.is_null() {
                         self.complain_about(&value)
                     }
                 }
@@ -190,7 +190,7 @@ impl<'a> AggregatorState<'a> {
                             .entry(key)
                             .or_insert_with(|| AggregatorExpressionState::new(aggregator_expr))
                             .aggregate(element_ref)
-                    } else {
+                    } else if !key.is_null() {
                         self.complain_about(&key)
                     }
                 }
