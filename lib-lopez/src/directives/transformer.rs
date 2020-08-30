@@ -252,10 +252,12 @@ impl Transformer {
             (Transformer::Flatten, Value::Array(array)) => {
                 let flattened = array
                     .into_iter()
-                    .flat_map(|element| match element {
-                        Value::Array(array) => array,
+                    .filter_map(|element|match element {
+                        Value::Array(array) => Some(array),
+                        Value::Null => None,
                         value => self.complain_about(&value),
                     })
+                    .flatten()
                     .collect::<Vec<_>>();
 
                 flattened.into()
