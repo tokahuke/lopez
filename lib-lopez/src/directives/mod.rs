@@ -9,9 +9,9 @@ mod variable;
 // Somewhere Else©; if it does not have an impl-block, it stays in `parse`.
 
 pub use aggregator::{Aggregator, AggregatorExpression};
-pub use extractor::{Extractor, ExtractorExpression};
+pub use extractor::{ExplodingExtractorExpression, Extractor, ExtractorExpression};
 pub use parse::{Boundary, Item, RuleSet};
-pub use transformer::{Transformer, TransformerExpression, Type};
+pub use transformer::{ComparableRegex, Transformer, TransformerExpression, Type};
 pub use variable::{SetVariables, Variable};
 
 use regex::RegexSet;
