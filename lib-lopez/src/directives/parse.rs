@@ -449,7 +449,25 @@ fn exploding_extractor_expression(
 }
 
 #[test]
-fn exploding_extractor_expression_test() {}
+fn exploding_extractor_expression_test() {
+    assert_eq!(
+        exploding_extractor_expression("attr \"src\" all-captures \"[0-9]+\" !explode"),
+        Ok((
+            "",
+            Ok(ExplodingExtractorExpression {
+                explodes: true,
+                extractor_expression: ExtractorExpression {
+                    extractor: Extractor::Attr("src".to_owned()),
+                    transformer_expression: TransformerExpression {
+                        transformers: vec![Transformer::AllCaptures(ComparableRegex(
+                            Regex::from_str("[0-9]+").unwrap()
+                        ))]
+                    },
+                }
+            })
+        ))
+    );
+}
 
 fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
     alt((
