@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag},
     character::complete::{anychar, digit1, multispace1},
-    combinator::{all_consuming, map, map_res, opt},
+    combinator::{all_consuming, map, map_res, not, opt},
     multi::{many0, separated_list},
     number::complete::double,
     sequence::{delimited, tuple},
@@ -333,7 +333,7 @@ fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
             tuple((
                 tag_whitespace("parent"),
                 tag_whitespace("("),
-                extractor,
+                trailing_whitespace(extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Extractor::Parent(Box::new(extractor?))),
@@ -342,7 +342,7 @@ fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
             tuple((
                 tag_whitespace("children"),
                 tag_whitespace("("),
-                extractor,
+                trailing_whitespace(extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Extractor::Children(Box::new(extractor?))),
@@ -351,7 +351,7 @@ fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
             tuple((
                 tag_whitespace("select-any"),
                 tag_whitespace("("),
-                extractor,
+                trailing_whitespace(extractor_expression),
                 tag_whitespace(","),
                 css_selector(')'),
                 tag(")"),
@@ -364,7 +364,7 @@ fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
             tuple((
                 tag_whitespace("select-all"),
                 tag_whitespace("("),
-                extractor,
+                trailing_whitespace(extractor_expression),
                 tag_whitespace(","),
                 css_selector(')'),
                 tag(")"),
@@ -384,6 +384,19 @@ fn extractor_test() {
         Ok(("", Ok(Extractor::Attr("foo".to_owned()))))
     );
     assert_eq!(extractor("inner-html"), Ok(("", Ok(Extractor::InnerHtml))));
+    assert_eq!(
+        extractor("select-all(text pretty, li)"),
+        Ok((
+            "",
+            Ok(Extractor::SelectAll(
+                Box::new(ExtractorExpression {
+                    extractor: vec![Extractor::Text],
+                    transformer_expression: vec![]
+                }),
+                scraper::Selector::parse("li").unwrap()
+            ),)
+        ))
+    );
 }
 
 fn extractor_expression(i: &str) -> IResult<&str, Result<ExtractorExpression, String>> {
@@ -425,7 +438,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("count"),
                 tag_whitespace("("),
-                extractor_expression,
+                trailing_whitespace(extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::CountNotNull(extractor?)),
@@ -435,7 +448,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("first"),
                 tag_whitespace("("),
-                extractor_expression,
+                trailing_whitespace(extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::First(extractor?)),
@@ -444,7 +457,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("collect"),
                 tag_whitespace("("),
-                extractor_expression,
+                trailing_whitespace(extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::Collect(extractor?)),
@@ -453,7 +466,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("distinct"),
                 tag_whitespace("("),
-                extractor_expression,
+                trailing_whitespace(extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::Distinct(extractor?)),
@@ -462,7 +475,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("sum"),
                 tag_whitespace("("),
-                extractor_expression,
+                trailing_whitespace(extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::Sum(extractor?)),
@@ -471,9 +484,9 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("group"),
                 tag_whitespace("("),
-                extractor_expression,
+                trailing_whitespace(extractor_expression),
                 tag_whitespace(","),
-                aggregator_expression,
+                trailing_whitespace(aggregator_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _, aggregator, _)| {
@@ -652,6 +665,14 @@ fn rule_set_test() {
         .unwrap()
         .1
         .unwrap();
+    rule_set("select ul { list: group(text, first(text pretty)); }")
+        .unwrap()
+        .1
+        .unwrap();
+    rule_set("select ul { list: collect(select-all(text, li) pretty); }")
+        .unwrap()
+        .1
+        .unwrap();
 }
 
 #[derive(Debug, PartialEq)]
@@ -765,12 +786,13 @@ fn boundary_test() {
 fn literal(i: &str) -> IResult<&str, Value> {
     alt((
         map(escaped_string, |string| Value::String(string)),
-        map_res(digit1, |number: &str| {
+        map_res(tuple((digit1, not(tag(".")))), |(number, _): (&str, ())| {
             number.parse::<u64>().map(|num| num.into())
         }),
-        map_res(tuple((tag("-"), digit1)), |(_, number): (_, &str)| {
-            number.parse::<u64>().map(|num| num.into())
-        }),
+        map_res(
+            tuple((tag("-"), digit1, not(tag(".")))),
+            |(_, number, _): (_, &str, _)| number.parse::<i64>().map(|num| (-num).into()),
+        ),
         map(double, |number| number.into()),
         map(
             tuple((
@@ -791,6 +813,9 @@ fn literal_test() {
     );
     assert_eq!(literal("1.234"), Ok(("", 1.234.into())));
     assert_eq!(literal("1234"), Ok(("", 1234.into())));
+    assert_eq!(literal("-1234"), Ok(("", (-1234).into())));
+    assert_eq!(literal("-1234.0"), Ok(("", (-1234.0).into())));
+    assert_eq!(literal("1234.0"), Ok(("", (1234.0).into())));
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -843,7 +868,7 @@ fn set_variable_test() {
             "",
             SetVariable {
                 name: "a_variable".to_owned(),
-                value: 1234.0.into(),
+                value: 1234.into(),
             }
         ))
     );
@@ -878,15 +903,15 @@ fn item_test() {
     //     .1
     //     .unwrap();
 
-    dbg!(item(
-        r#"select html {
-    ldv-num: first(
-        html all-captures "(?m)^.*0\s*8\s*0\s*0\s*4\s*1\s*1\s*0\s*5\s*0.*$"
-        each(get "0")
-    );
-}
-"#
-    ));
+    //     dbg!(item(
+    //         r#"select html {
+    //     ldv-num: first(
+    //         html all-captures "(?m)^.*0\s*8\s*0\s*0\s*4\s*1\s*1\s*0\s*5\s*0.*$"
+    //         each(get "0")
+    //     );
+    // }
+    // "#
+    //     ));
 }
 
 pub fn entrypoint(i: &str) -> IResult<&str, Result<Vec<Item>, String>> {
