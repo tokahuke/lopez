@@ -925,6 +925,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "siphasher",
+ "smallvec",
  "structopt",
  "tokio",
  "url",
