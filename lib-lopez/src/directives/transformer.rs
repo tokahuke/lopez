@@ -77,6 +77,17 @@ fn pretty_test() {
     assert_eq!("a\nc\n", pretty(ugly));
 }
 
+/// Need this to shoehorn regex equality. Note: this is utterly broken in a
+/// context wider than unittesting.
+#[derive(Debug, Clone)]
+pub struct ComparableRegex(pub Regex);
+
+impl PartialEq for ComparableRegex {
+    fn eq(&self, other: &ComparableRegex) -> bool {
+        self.0.as_str() == other.0.as_str()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Type {
     Any,
@@ -100,7 +111,7 @@ impl fmt::Display for Type {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Transformer {
     // General purpose:
     IsNull,
@@ -126,8 +137,8 @@ pub enum Transformer {
     Pretty,
 
     // Regex:
-    Capture(Regex),
-    AllCaptures(Regex),
+    Capture(ComparableRegex),
+    AllCaptures(ComparableRegex),
 }
 
 impl fmt::Display for Transformer {
@@ -147,9 +158,13 @@ impl fmt::Display for Transformer {
             Transformer::Flatten => write!(f, "flatten"),
             Transformer::Each(transformer) => write!(f, "each({})", transformer),
             Transformer::Filter(transformer) => write!(f, "filter({})", transformer),
-            Transformer::Capture(regex) => write!(f, "capture {:?}", regex.as_str()),
+            Transformer::Capture(ComparableRegex(regex)) => {
+                write!(f, "capture {:?}", regex.as_str())
+            }
             Transformer::Pretty => write!(f, "pretty"),
-            Transformer::AllCaptures(regex) => write!(f, "all-captures {:?}", regex.as_str()),
+            Transformer::AllCaptures(ComparableRegex(regex)) => {
+                write!(f, "all-captures {:?}", regex.as_str())
+            }
         }
     }
 }
@@ -260,11 +275,11 @@ impl Transformer {
                 .collect::<Vec<_>>()
                 .into(),
             (Transformer::Pretty, Value::String(string)) => pretty(&string).into(),
-            (Transformer::Capture(regex), Value::String(string)) => regex
+            (Transformer::Capture(ComparableRegex(regex)), Value::String(string)) => regex
                 .captures(&string)
                 .map(|captures| capture_json(&regex, captures).into())
                 .unwrap_or(Value::Null),
-            (Transformer::AllCaptures(regex), Value::String(string)) => regex
+            (Transformer::AllCaptures(ComparableRegex(regex)), Value::String(string)) => regex
                 .captures_iter(&string)
                 .map(|captures| capture_json(&regex, captures))
                 .collect::<Vec<_>>()
@@ -275,7 +290,7 @@ impl Transformer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TransformerExpression {
     pub transformers: Vec<Transformer>,
 }

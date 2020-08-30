@@ -43,3 +43,4 @@ structopt = "0.3.16"
 ansi_term = "0.11"
 log4rs = "0.13.0"
 cached = { version = "0.18.0", default-features = false }
+smallvec = "1.4.2"

@@ -1,11 +1,11 @@
 use scraper::ElementRef;
 use serde_json::{Map, Value};
+use smallvec::SmallVec;
 use std::fmt;
 
 use super::transformer::{TransformerExpression, Type};
 
-#[derive(Debug, Clone)]
-#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Extractor {
     Name,
     Text,
@@ -110,7 +110,7 @@ impl Extractor {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExtractorExpression {
     pub extractor: Extractor,
     pub transformer_expression: TransformerExpression,
@@ -136,5 +136,50 @@ impl ExtractorExpression {
     pub fn extract(&self, element_ref: ElementRef) -> Value {
         self.transformer_expression
             .eval(self.extractor.extract(element_ref))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExplodingExtractorExpression {
+    pub explodes: bool,
+    pub extractor_expression: ExtractorExpression,
+}
+
+impl fmt::Display for ExplodingExtractorExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.explodes {
+            write!(f, "{} !explode", self.extractor_expression)
+        } else {
+            write!(f, "{}", self.extractor_expression)
+        }
+    }
+}
+
+impl ExplodingExtractorExpression {
+    pub fn type_of(&self) -> Result<Type, crate::Error> {
+        let raw = self.extractor_expression.type_of()?;
+
+        if self.explodes {
+            if let Type::Array(inner) = raw {
+                Ok(Type::clone(&inner))
+            } else {
+                todo!() // type error
+            }
+        } else {
+            Ok(raw)
+        }
+    }
+
+    pub fn extract(&self, element_ref: ElementRef) -> SmallVec<[Value; 1]> {
+        let extracted = self.extractor_expression.extract(element_ref);
+        if self.explodes {
+            if let Value::Array(array) = self.extractor_expression.extract(element_ref) {
+                SmallVec::from_vec(array)
+            } else {
+                todo!()
+            }
+        } else {
+            SmallVec::from_buf([extracted])
+        }
     }
 }

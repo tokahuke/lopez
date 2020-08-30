@@ -283,11 +283,11 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
         map(tag("pretty"), |_| Ok(Transformer::Pretty)),
         map(
             tuple((tag_whitespace("capture"), escaped_string)),
-            |(_, regexp)| Ok(Transformer::Capture(regex(&regexp)?)),
+            |(_, regexp)| Ok(Transformer::Capture(ComparableRegex(regex(&regexp)?))),
         ),
         map(
             tuple((tag_whitespace("all-captures"), escaped_string)),
-            |(_, regexp)| Ok(Transformer::AllCaptures(regex(&regexp)?)),
+            |(_, regexp)| Ok(Transformer::AllCaptures(ComparableRegex(regex(&regexp)?))),
         ),
     ))(i)
 }
@@ -300,7 +300,7 @@ fn transformer_test() {
         .1
         .unwrap()
     {
-        Transformer::Capture(regex) => assert_eq!(
+        Transformer::Capture(ComparableRegex(regex)) => assert_eq!(
             Regex::from_str("$(:!?foo)*").unwrap().as_str(),
             regex.as_str()
         ),
@@ -390,8 +390,10 @@ fn extractor_test() {
             "",
             Ok(Extractor::SelectAll(
                 Box::new(ExtractorExpression {
-                    extractor: vec![Extractor::Text],
-                    transformer_expression: vec![]
+                    extractor: Extractor::Text,
+                    transformer_expression: TransformerExpression {
+                        transformers: vec![Transformer::Pretty],
+                    },
                 }),
                 scraper::Selector::parse("li").unwrap()
             ),)
@@ -413,24 +415,41 @@ fn extractor_expression(i: &str) -> IResult<&str, Result<ExtractorExpression, St
 
 #[test]
 fn extractor_expression_test() {
-    match extractor_expression("attr \"src\" capture \"[0-9]+\"")
-        .unwrap()
-        .1
-        .unwrap()
-    {
-        ExtractorExpression {
-            extractor,
-            transformer_expression: TransformerExpression { transformers },
-        } => {
-            assert_eq!(extractor, Extractor::Attr("src".to_owned()));
-            assert_eq!(transformers.len(), 1);
-            match &transformers[0] {
-                Transformer::Capture(regex) => assert_eq!(regex.as_str(), "[0-9]+"),
-                t => panic!("got {:?}", t),
-            }
-        }
-    }
+    assert_eq!(
+        extractor_expression("attr \"src\" capture \"[0-9]+\""),
+        Ok((
+            "",
+            Ok(ExtractorExpression {
+                extractor: Extractor::Attr("src".to_owned()),
+                transformer_expression: TransformerExpression {
+                    transformers: vec![Transformer::Capture(ComparableRegex(
+                        Regex::from_str("[0-9]+").unwrap()
+                    ))]
+                },
+            })
+        ))
+    );
 }
+
+fn exploding_extractor_expression(
+    i: &str,
+) -> IResult<&str, Result<ExplodingExtractorExpression, String>> {
+    map(
+        tuple((
+            trailing_whitespace(extractor_expression),
+            opt(tag("!explode")),
+        )),
+        |(extractor_expression, explodes)| {
+            Ok(ExplodingExtractorExpression {
+                explodes: explodes.is_some(),
+                extractor_expression: extractor_expression?,
+            })
+        },
+    )(i)
+}
+
+#[test]
+fn exploding_extractor_expression_test() {}
 
 fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
     alt((
@@ -438,7 +457,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("count"),
                 tag_whitespace("("),
-                trailing_whitespace(extractor_expression),
+                trailing_whitespace(exploding_extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::CountNotNull(extractor?)),
@@ -448,7 +467,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("first"),
                 tag_whitespace("("),
-                trailing_whitespace(extractor_expression),
+                trailing_whitespace(exploding_extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::First(extractor?)),
@@ -457,7 +476,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("collect"),
                 tag_whitespace("("),
-                trailing_whitespace(extractor_expression),
+                trailing_whitespace(exploding_extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::Collect(extractor?)),
@@ -466,7 +485,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("distinct"),
                 tag_whitespace("("),
-                trailing_whitespace(extractor_expression),
+                trailing_whitespace(exploding_extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::Distinct(extractor?)),
@@ -475,7 +494,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("sum"),
                 tag_whitespace("("),
-                trailing_whitespace(extractor_expression),
+                trailing_whitespace(exploding_extractor_expression),
                 tag(")"),
             )),
             |(_, _, extractor, _)| Ok(Aggregator::Sum(extractor?)),
@@ -484,7 +503,7 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
             tuple((
                 tag_whitespace("group"),
                 tag_whitespace("("),
-                trailing_whitespace(extractor_expression),
+                trailing_whitespace(exploding_extractor_expression),
                 tag_whitespace(","),
                 trailing_whitespace(aggregator_expression),
                 tag(")"),
@@ -499,24 +518,23 @@ fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
 #[test]
 fn aggregator_test() {
     // No `PartialEq` for me.
-    match aggregator("first(text capture \n\t \"$(:!?foo)*\")")
-        .unwrap()
-        .1
-        .unwrap()
-    {
-        Aggregator::First(ExtractorExpression {
-            extractor,
-            transformer_expression: TransformerExpression { transformers },
-        }) => {
-            assert_eq!(extractor, Extractor::Text);
-            assert_eq!(transformers.len(), 1);
-            match &transformers[0] {
-                Transformer::Capture(regex) => assert_eq!(regex.as_str(), "$(:!?foo)*"),
-                t => panic!("got {:?}", t),
-            }
-        }
-        e => panic!("got {:?}", e),
-    }
+    assert_eq!(
+        aggregator("first(text capture \n\t \"$(:!?foo)*\")"),
+        Ok((
+            "",
+            Ok(Aggregator::First(ExplodingExtractorExpression {
+                explodes: false,
+                extractor_expression: ExtractorExpression {
+                    extractor: Extractor::Text,
+                    transformer_expression: TransformerExpression {
+                        transformers: vec![Transformer::Capture(ComparableRegex(
+                            Regex::from_str("$(:!?foo)*").unwrap()
+                        ))],
+                    },
+                },
+            }))
+        ))
+    )
 }
 
 fn aggregator_expression(i: &str) -> IResult<&str, Result<AggregatorExpression, String>> {
@@ -533,37 +551,28 @@ fn aggregator_expression(i: &str) -> IResult<&str, Result<AggregatorExpression, 
 
 #[test]
 fn aggregator_expression_test() {
-    // No `PartialEq` for me.
-    match aggregator_expression("first(text capture \n\t \"$(:!?foo)*\") length ")
-        .unwrap()
-        .1
-        .unwrap()
-    {
-        AggregatorExpression {
-            aggregator:
-                Aggregator::First(ExtractorExpression {
-                    extractor,
-                    transformer_expression: TransformerExpression { transformers },
+    assert_eq!(
+        aggregator_expression("first(text capture \n\t \"$(:!?foo)*\") length "),
+        Ok((
+            "",
+            Ok(AggregatorExpression {
+                aggregator: Aggregator::First(ExplodingExtractorExpression {
+                    explodes: false,
+                    extractor_expression: ExtractorExpression {
+                        extractor: Extractor::Text,
+                        transformer_expression: TransformerExpression {
+                            transformers: vec![Transformer::Capture(ComparableRegex(
+                                Regex::from_str("$(:!?foo)*").unwrap()
+                            )),],
+                        },
+                    },
                 }),
-            transformer_expression:
-                TransformerExpression {
-                    transformers: agg_transformers,
+                transformer_expression: TransformerExpression {
+                    transformers: vec![Transformer::Length,],
                 },
-        } => {
-            assert_eq!(extractor, Extractor::Text);
-            assert_eq!(transformers.len(), 1);
-            match &transformers[0] {
-                Transformer::Capture(regex) => assert_eq!(regex.as_str(), "$(:!?foo)*"),
-                t => panic!("got {:?}", t),
-            }
-            assert_eq!(agg_transformers.len(), 1);
-            match &agg_transformers[0] {
-                Transformer::Length => {}
-                t => panic!("got {:?}", t),
-            }
-        }
-        e => panic!("got {:?}", e),
-    }
+            })
+        ))
+    )
 }
 
 fn in_directive(i: &str) -> IResult<&str, Result<Regex, String>> {

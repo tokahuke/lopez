@@ -5,18 +5,18 @@ use std::fmt;
 
 use super::value_ext::{force_f64, HashableJson};
 
-use super::extractor::ExtractorExpression;
+use super::extractor::ExplodingExtractorExpression;
 use super::transformer::{TransformerExpression, Type};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Aggregator {
     Count,
-    CountNotNull(ExtractorExpression),
-    First(ExtractorExpression),
-    Collect(ExtractorExpression),
-    Distinct(ExtractorExpression),
-    Sum(ExtractorExpression),
-    Group(ExtractorExpression, Box<AggregatorExpression>),
+    CountNotNull(ExplodingExtractorExpression),
+    First(ExplodingExtractorExpression),
+    Collect(ExplodingExtractorExpression),
+    Distinct(ExplodingExtractorExpression),
+    Sum(ExplodingExtractorExpression),
+    Group(ExplodingExtractorExpression, Box<AggregatorExpression>),
 }
 
 impl fmt::Display for Aggregator {
@@ -44,8 +44,12 @@ impl Aggregator {
         match self {
             Aggregator::Count => Ok(Type::Number),
             Aggregator::CountNotNull(extractor_expr) => {
-                extractor_expr.type_of()?;
-                Ok(Type::Number)
+                let typ = extractor_expr.type_of()?;
+                if let Type::Bool = typ {
+                    Ok(Type::Number)
+                } else {
+                    self.type_error(&typ)
+                }
             }
             Aggregator::First(extractor_expr) => extractor_expr.type_of(),
             Aggregator::Collect(extractor_expr) => {
@@ -76,7 +80,7 @@ impl Aggregator {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AggregatorExpression {
     pub aggregator: Aggregator,
     pub transformer_expression: TransformerExpression,
@@ -103,13 +107,13 @@ impl AggregatorExpression {
 #[derive(Debug)]
 pub(crate) enum AggregatorState<'a> {
     Count(usize),
-    CountNotNull(&'a ExtractorExpression, usize),
-    First(&'a ExtractorExpression, Option<Value>),
-    Collect(&'a ExtractorExpression, Vec<Value>),
-    Distinct(&'a ExtractorExpression, HashSet<HashableJson>),
-    Sum(&'a ExtractorExpression, f64),
+    CountNotNull(&'a ExplodingExtractorExpression, usize),
+    First(&'a ExplodingExtractorExpression, Option<Value>),
+    Collect(&'a ExplodingExtractorExpression, Vec<Value>),
+    Distinct(&'a ExplodingExtractorExpression, HashSet<HashableJson>),
+    Sum(&'a ExplodingExtractorExpression, f64),
     Group(
-        &'a ExtractorExpression,
+        &'a ExplodingExtractorExpression,
         &'a AggregatorExpression,
         BTreeMap<String, AggregatorExpressionState<'a>>,
     ),
@@ -143,38 +147,52 @@ impl<'a> AggregatorState<'a> {
         match self {
             AggregatorState::Count(count) => *count += 1,
             AggregatorState::CountNotNull(extractor, count) => {
-                if !extractor.extract(element_ref).is_null() {
-                    *count += 1;
+                for value in extractor.extract(element_ref) {
+                    if value.as_bool().unwrap_or(false) {
+                        *count += 1;
+                    }
                 }
             }
             AggregatorState::First(extractor, maybe_value) => {
                 if maybe_value.is_none() {
-                    *maybe_value = Some(extractor.extract(element_ref))
+                    for value in extractor.extract(element_ref) {
+                        if !value.is_null() {
+                            *maybe_value = Some(value);
+                            break;
+                        }
+                    }
                 }
             }
             AggregatorState::Collect(extractor, values) => {
-                values.push(extractor.extract(element_ref));
+                values.extend(extractor.extract(element_ref));
             }
             AggregatorState::Distinct(extractor, values) => {
-                values.insert(HashableJson(extractor.extract(element_ref)));
+                values.extend(
+                    extractor
+                        .extract(element_ref)
+                        .into_iter()
+                        .map(|value| HashableJson(value)),
+                );
             }
             AggregatorState::Sum(extractor, sum) => {
-                let value = extractor.extract(element_ref);
-                if let Value::Number(num) = value {
-                    *sum += force_f64(&num);
-                } else {
-                    self.complain_about(&value)
+                for value in extractor.extract(element_ref) {
+                    if let Value::Number(num) = value {
+                        *sum += force_f64(&num);
+                    } else {
+                        self.complain_about(&value)
+                    }
                 }
             }
             AggregatorState::Group(extractor_expr, aggregator_expr, groups) => {
-                let key = extractor_expr.extract(element_ref);
-                if let Value::String(key) = key {
-                    groups
-                        .entry(key)
-                        .or_insert_with(|| AggregatorExpressionState::new(aggregator_expr))
-                        .aggregate(element_ref)
-                } else {
-                    self.complain_about(&key)
+                for key in extractor_expr.extract(element_ref) {
+                    if let Value::String(key) = key {
+                        groups
+                            .entry(key)
+                            .or_insert_with(|| AggregatorExpressionState::new(aggregator_expr))
+                            .aggregate(element_ref)
+                    } else {
+                        self.complain_about(&key)
+                    }
                 }
             }
         }
