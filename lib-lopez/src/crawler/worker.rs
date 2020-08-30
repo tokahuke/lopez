@@ -268,10 +268,11 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
 
     pub async fn crawl(&self, page_url: &Url) -> Crawled {
         // Now, this is the active part until the end:
+        // NOTE TO SELF: DO NOT RETURN EARLY IN THIS FUNCTION.
         self.task_counter.inc_active();
 
         // Now, download, but be quick.
-        match time::timeout(
+        let crawled = match time::timeout(
             Duration::from_secs_f64(
                 self.variables
                     .get_as_positive_f64(Variable::RequestTimeout)
@@ -326,7 +327,12 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             },
             Ok(Err(error)) => Crawled::Error(error),
             Err(_) => Crawled::TimedOut,
-        }
+        };
+
+        // End of the active part:
+        self.task_counter.dec_active();
+
+        crawled
     }
 
     pub async fn store(
@@ -467,9 +473,6 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                                 depth,
                             )
                             .await;
-
-                        // Running task increases active; decrease it here:
-                        worker_ref.task_counter.dec_active();
 
                         // Now, analyze results:
                         if let Err(error) = result {

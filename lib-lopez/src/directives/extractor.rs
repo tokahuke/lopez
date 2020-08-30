@@ -4,7 +4,7 @@ use std::fmt;
 
 use super::transformer::{TransformerExpression, Type};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum Extractor {
     Name,
@@ -15,10 +15,10 @@ pub enum Extractor {
     Attrs,
     Classes,
     Id,
-    Parent(Box<Extractor>),
-    Children(Box<Extractor>),
-    SelectAny(Box<Extractor>, scraper::Selector),
-    SelectAll(Box<Extractor>, scraper::Selector),
+    Parent(Box<ExtractorExpression>),
+    Children(Box<ExtractorExpression>),
+    SelectAny(Box<ExtractorExpression>, scraper::Selector),
+    SelectAll(Box<ExtractorExpression>, scraper::Selector),
 }
 
 impl fmt::Display for Extractor {
@@ -45,8 +45,8 @@ impl fmt::Display for Extractor {
 }
 
 impl Extractor {
-    pub fn type_of(&self) -> Type {
-        match self {
+    pub fn type_of(&self) -> Result<Type, crate::Error> {
+        Ok(match self {
             Extractor::Name => Type::String,
             Extractor::Html => Type::String,
             Extractor::InnerHtml => Type::String,
@@ -55,11 +55,11 @@ impl Extractor {
             Extractor::Attrs => Type::Map(Box::new(Type::String)),
             Extractor::Classes => Type::Array(Box::new(Type::String)),
             Extractor::Id => Type::String,
-            Extractor::Parent(parent) => parent.type_of(),
-            Extractor::Children(children) => Type::Array(Box::new(children.type_of())),
-            Extractor::SelectAny(extractor, _) => extractor.type_of(),
-            Extractor::SelectAll(extractor, _) => Type::Array(Box::new(extractor.type_of())),
-        }
+            Extractor::Parent(parent) => parent.type_of()?,
+            Extractor::Children(children) => Type::Array(Box::new(children.type_of()?)),
+            Extractor::SelectAny(extractor, _) => extractor.type_of()?,
+            Extractor::SelectAll(extractor, _) => Type::Array(Box::new(extractor.type_of()?)),
+        })
     }
 
     pub fn extract(&self, element_ref: ElementRef) -> Value {
@@ -130,7 +130,7 @@ impl fmt::Display for ExtractorExpression {
 impl ExtractorExpression {
     pub fn type_of(&self) -> Result<Type, crate::Error> {
         self.transformer_expression
-            .type_for(&self.extractor.type_of())
+            .type_for(&self.extractor.type_of()?)
     }
 
     pub fn extract(&self, element_ref: ElementRef) -> Value {
