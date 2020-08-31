@@ -117,6 +117,7 @@ pub enum Transformer {
     IsNull,
     IsNotNull,
     Hash,
+    Not,
 
     // Numeric:
     AsNumber,
@@ -132,7 +133,7 @@ pub enum Transformer {
     Flatten,
     Each(TransformerExpression),
     Filter(TransformerExpression),
-
+    
     // String manipulation
     Pretty,
 
@@ -147,6 +148,7 @@ impl fmt::Display for Transformer {
             Transformer::IsNull => write!(f, "is-null"),
             Transformer::IsNotNull => write!(f, "is-not-null"),
             Transformer::Hash => write!(f, "hash"),
+            Transformer::Not => write!(f, "not"),
             Transformer::AsNumber => write!(f, "as-number"),
             Transformer::GreaterThan(num) => write!(f, "greater-than {}", num),
             Transformer::LesserThan(num) => write!(f, "lesser-than {}", num),
@@ -179,6 +181,7 @@ impl Transformer {
             (Transformer::IsNull, _) => Ok(Type::Bool),
             (Transformer::IsNotNull, _) => Ok(Type::Bool),
             (Transformer::Hash, Type::String) => Ok(Type::Number),
+            (Transformer::Not, Type::Bool) => Ok(Type::Bool),
             (Transformer::AsNumber, Type::String) => Ok(Type::Number),
             (Transformer::GreaterThan(_), Type::Number) => Ok(Type::Bool),
             (Transformer::LesserThan(_), Type::Number) => Ok(Type::Bool),
@@ -201,9 +204,19 @@ impl Transformer {
             (Transformer::Each(inner), Type::Array(typ)) => {
                 Ok(Type::Array(Box::new(inner.type_for(typ)?)))
             }
+            (Transformer::Each(inner), Type::Map(typ)) => {
+                Ok(Type::Map(Box::new(inner.type_for(typ)?)))
+            }
             (Transformer::Filter(inner), Type::Array(typ)) => {
                 if let Ok(Type::Bool) = inner.type_for(typ) {
-                    Ok(Type::clone(typ))
+                    Ok(Type::Array(typ.clone()))
+                } else {
+                    self.type_error(input)
+                }
+            }
+            (Transformer::Filter(inner), Type::Map(typ)) => {
+                if let Ok(Type::Bool) = inner.type_for(typ) {
+                    Ok(Type::Map(typ.clone()))
                 } else {
                     self.type_error(input)
                 }
@@ -228,6 +241,7 @@ impl Transformer {
             (Transformer::IsNull, _) => false.into(),
             (Transformer::IsNotNull, Value::Null) => false.into(),
             (Transformer::IsNotNull, _) => true.into(),
+            (Transformer::Not, Value::Bool(b)) => (!b).into(),
             (Transformer::Hash, Value::String(string)) => crate::hash(&string).into(),
             (Transformer::AsNumber, Value::String(string)) => string
                 .parse::<f64>()
@@ -267,6 +281,11 @@ impl Transformer {
                 .map(|value| inner.eval(value))
                 .collect::<Vec<_>>()
                 .into(),
+            (&Transformer::Each(ref inner), Value::Object(map)) => map
+                .into_iter()
+                .map(|(key, value)| (key, inner.eval(value)))
+                .collect::<Map<String, Value>>()
+                .into(),
             (Transformer::Filter(inner), Value::Array(array)) => array
                 .into_iter()
                 .filter_map(|value| match inner.eval(value.clone()) {
@@ -275,6 +294,15 @@ impl Transformer {
                     value => self.complain_about(&value),
                 })
                 .collect::<Vec<_>>()
+                .into(),
+            (Transformer::Filter(inner), Value::Object(map)) => map
+                .into_iter()
+                .filter_map(|(key, value)| match inner.eval(value.clone()) {
+                    Value::Null | Value::Bool(false) => None,
+                    Value::Bool(true) => Some((key, value)),
+                    value => self.complain_about(&value),
+                })
+                .collect::<Map<String, Value>>()
                 .into(),
             (Transformer::Pretty, Value::String(string)) => pretty(&string).into(),
             (Transformer::Capture(ComparableRegex(regex)), Value::String(string)) => regex
