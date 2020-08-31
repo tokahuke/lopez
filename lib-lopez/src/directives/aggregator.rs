@@ -8,7 +8,7 @@ use super::value_ext::{force_f64, HashableJson};
 use super::extractor::ExplodingExtractorExpression;
 use super::transformer::{TransformerExpression, Type};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Aggregator {
     Count,
     CountNotNull(ExplodingExtractorExpression),
@@ -80,7 +80,7 @@ impl Aggregator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct AggregatorExpression {
     pub aggregator: Aggregator,
     pub transformer_expression: TransformerExpression,

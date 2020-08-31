@@ -18,6 +18,7 @@ use regex::RegexSet;
 use scraper::Html;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -460,13 +461,13 @@ impl Directives {
             .flat_map(|(module_name, module)| {
                 module.items.iter().filter_map(move |item| {
                     if let Item::RuleSet(rule_set) = item {
-                        Some((module_name.to_owned(), rule_set.clone()))
+                        Some((module_name.to_owned(), Arc::clone(rule_set)))
                     } else {
                         None
                     }
                 })
             })
-            .collect::<Vec<(String, RuleSet)>>();
+            .collect::<Vec<(String, Arc<RuleSet>)>>();
 
         Analyzer { rule_sets }
     }
@@ -539,7 +540,7 @@ impl Boundaries {
 
 #[derive(Debug)]
 pub struct Analyzer {
-    rule_sets: Vec<(String, RuleSet)>,
+    rule_sets: Vec<(String, Arc<RuleSet>)>,
 }
 
 impl Analyzer {
