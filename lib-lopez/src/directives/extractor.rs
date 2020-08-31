@@ -163,7 +163,7 @@ impl ExplodingExtractorExpression {
             if let Type::Array(inner) = raw {
                 Ok(Type::clone(&inner))
             } else {
-                todo!() // type error
+                Err(crate::Error::TypeError("!explode".to_owned(), raw))
             }
         } else {
             Ok(raw)
