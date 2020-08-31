@@ -58,6 +58,7 @@ where
     map(tuple((f, whitespace)), |(t, _)| t)
 }
 
+#[allow(clippy::needless_lifetimes)] // not that needless...
 fn tag_whitespace<'a>(tag_val: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, &'a str> {
     trailing_whitespace(tag(tag_val))
 }
@@ -817,7 +818,7 @@ fn boundary_test() {
 
 fn literal(i: &str) -> IResult<&str, Value> {
     alt((
-        map(escaped_string, |string| Value::String(string)),
+        map(escaped_string, Value::String),
         map_res(tuple((digit1, not(tag(".")))), |(number, _): (&str, ())| {
             number.parse::<u64>().map(|num| num.into())
         }),

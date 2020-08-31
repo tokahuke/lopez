@@ -2,7 +2,7 @@ use rayon::prelude::*;
 use std::collections::BTreeMap;
 
 pub fn power_iteration<S, T>(
-    mut edges: S,
+    edges: S,
     stride: usize,
     iterations: usize,
 ) -> impl Iterator<Item = (T, f32)>
@@ -28,7 +28,7 @@ where
 
     // Materialize everything:
     log::info!("fetching data");
-    while let Some((from, to)) = edges.next() {
+    for (from, to) in edges {
         let from_id = id_for(from);
         let to_id = id_for(to);
 
@@ -90,7 +90,7 @@ where
                 (min_j, batch)
             })
             .fold(
-                || BTreeMap::<_, Vec<f32>>::new(),
+                BTreeMap::<_, Vec<f32>>::new,
                 |mut acc, (min_j, batch)| {
                     acc.entry(min_j)
                         .and_modify(|existing| {
@@ -104,7 +104,7 @@ where
                 },
             )
             .reduce(
-                || BTreeMap::<_, Vec<f32>>::new(),
+                BTreeMap::<_, Vec<f32>>::new,
                 |mut a, b| {
                     for (min_j, batch) in b {
                         a.entry(min_j)

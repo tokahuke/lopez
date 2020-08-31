@@ -62,6 +62,7 @@ impl Extractor {
         })
     }
 
+    #[inline(always)]
     pub fn extract(&self, element_ref: ElementRef) -> Value {
         match self {
             Extractor::Name => element_ref.value().name().into(),
@@ -87,12 +88,12 @@ impl Extractor {
                 .unwrap_or(Value::Null),
             Extractor::Parent(parent) => element_ref
                 .parent()
-                .and_then(|node_ref| ElementRef::wrap(node_ref))
+                .and_then(ElementRef::wrap)
                 .map(|element_ref| parent.extract(element_ref))
                 .unwrap_or(Value::Null),
             Extractor::Children(children) => element_ref
                 .children()
-                .filter_map(|node_ref| ElementRef::wrap(node_ref))
+                .filter_map(ElementRef::wrap)
                 .map(|element_ref| children.extract(element_ref))
                 .collect::<Vec<_>>()
                 .into(),
@@ -170,6 +171,7 @@ impl ExplodingExtractorExpression {
         }
     }
 
+    #[inline(always)]
     pub fn extract(&self, element_ref: ElementRef) -> SmallVec<[Value; 1]> {
         let extracted = self.extractor_expression.extract(element_ref);
         if self.explodes {

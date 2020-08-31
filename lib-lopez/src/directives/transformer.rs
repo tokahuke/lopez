@@ -235,6 +235,7 @@ impl Transformer {
         panic!("type checked: {:?} {:?}", self, value)
     }
 
+    #[inline(always)]
     pub fn eval(&self, input: Value) -> Value {
         match (self, input) {
             (Transformer::IsNull, Value::Null) => true.into(),
@@ -250,7 +251,7 @@ impl Transformer {
                 .unwrap_or(Value::Null),
             (&Transformer::GreaterThan(rhs), Value::Number(lhs)) => (force_f64(&lhs) > rhs).into(),
             (&Transformer::LesserThan(rhs), Value::Number(lhs)) => (force_f64(&lhs) < rhs).into(),
-            (&Transformer::Equals(rhs), Value::Number(lhs)) => (force_f64(&lhs) == rhs).into(),
+            (&Transformer::Equals(rhs), Value::Number(lhs)) => ((force_f64(&lhs) - rhs).abs() < std::f64::EPSILON).into(),
             (Transformer::Length, Value::Array(array)) => array.len().into(),
             (Transformer::Length, Value::String(string)) => string.len().into(),
             (Transformer::Length, Value::Object(object)) => object.len().into(),

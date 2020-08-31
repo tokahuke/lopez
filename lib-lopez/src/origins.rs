@@ -92,7 +92,7 @@ impl Origins {
         let origin = read_guard.get(&url_origin);
 
         if let Some(origin) = origin {
-            return origin.clone();
+            origin.clone()
         } else {
             drop(read_guard); // prevents deadlock.
             let mut write_guard = origins.write().await;
@@ -117,7 +117,7 @@ impl Origins {
                 .get(&url_origin)
                 .expect("origin should always exist by this point");
 
-            return origin.clone();
+            origin.clone()
         }
     }
 }

@@ -143,6 +143,7 @@ impl<'a> AggregatorState<'a> {
         }
     }
 
+    #[inline]
     pub fn aggregate(&mut self, element_ref: ElementRef) {
         match self {
             AggregatorState::Count(count) => *count += 1,
@@ -173,7 +174,7 @@ impl<'a> AggregatorState<'a> {
                     extractor
                         .extract(element_ref)
                         .into_iter()
-                        .map(|value| HashableJson(value)),
+                        .map(HashableJson),
                 );
             }
             AggregatorState::Sum(extractor, sum) => {

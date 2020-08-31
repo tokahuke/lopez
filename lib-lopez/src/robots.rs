@@ -24,7 +24,7 @@ impl RobotExclusion {
                 .collect::<Vec<_>>(),
             crawl_delay: my_section
                 .crawl_delay
-                .or(my_section.req_rate.and_then(|req_rate| {
+                .or_else(|| my_section.req_rate.and_then(|req_rate| {
                     if req_rate.requests > 0 {
                         Some(req_rate.seconds as f64 / req_rate.requests as f64)
                     } else {

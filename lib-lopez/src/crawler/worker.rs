@@ -207,10 +207,10 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             // Force UTF-8, dammit!
             let location = String::from_utf8_lossy(location_value.as_bytes()).into_owned();
 
-            return Ok(Hit::Redirect {
+            Ok(Hit::Redirect {
                 location,
                 status_code,
-            });
+            })
         } else {
             // Get encoding:
             // Force UTF-8, dammit!
@@ -256,7 +256,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                     DeflateDecoder::new(&content[..]).read_to_end(&mut decoded)?;
                     decoded
                 }
-                _ => Err(crate::Error::UnknownContentEncoding(encoding))?,
+                _ => return Err(crate::Error::UnknownContentEncoding(encoding)),
             };
 
             Ok(Hit::Download {
@@ -447,7 +447,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| err.into())?
             .into_iter()
-            .map(|worker_backend| worker_backend)
+            // .map(|worker_backend| worker_backend)
             .collect::<Vec<_>>();
 
             // // Now, become a reference count:

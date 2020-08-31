@@ -46,7 +46,7 @@ impl Variable {
 
     fn bad_value<T>(&self, literal: &Value) -> Result<T, crate::Error> {
         Err(crate::Error::BadSetVariableValue(
-            self.clone(),
+            *self,
             literal.clone(),
         ))
     }
