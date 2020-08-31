@@ -5,13 +5,13 @@ use std::fmt;
 
 use super::transformer::{TransformerExpression, Type};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Extractor {
     Name,
     Text,
     Html,
     InnerHtml,
-    Attr(String),
+    Attr(Box<str>),
     Attrs,
     Classes,
     Id,
@@ -110,7 +110,7 @@ impl Extractor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct ExtractorExpression {
     pub extractor: Extractor,
     pub transformer_expression: TransformerExpression,
@@ -139,7 +139,7 @@ impl ExtractorExpression {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct ExplodingExtractorExpression {
     pub explodes: bool,
     pub extractor_expression: ExtractorExpression,

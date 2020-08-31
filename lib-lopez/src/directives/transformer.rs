@@ -79,7 +79,7 @@ fn pretty_test() {
 
 /// Need this to shoehorn regex equality. Note: this is utterly broken in a
 /// context wider than unittesting.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ComparableRegex(pub Regex);
 
 impl PartialEq for ComparableRegex {
@@ -111,7 +111,7 @@ impl fmt::Display for Type {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Transformer {
     // General purpose:
     IsNull,
@@ -128,7 +128,7 @@ pub enum Transformer {
     // Collections:
     Length,
     IsEmpty,
-    Get(String),
+    Get(Box<str>),
     GetIdx(usize),
     Flatten,
     Each(TransformerExpression),
@@ -258,7 +258,7 @@ impl Transformer {
             (Transformer::IsEmpty, Value::String(string)) => string.is_empty().into(),
             (Transformer::IsEmpty, Value::Object(object)) => object.is_empty().into(),
             (Transformer::Get(ref idx), Value::Object(mut object)) => {
-                object.remove(idx).unwrap_or(Value::Null)
+                object.remove(idx.as_ref()).unwrap_or(Value::Null)
             }
             (&Transformer::GetIdx(idx), Value::Array(array)) => {
                 array.get(idx).cloned().unwrap_or(Value::Null)
@@ -320,9 +320,9 @@ impl Transformer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct TransformerExpression {
-    pub transformers: Vec<Transformer>,
+    pub transformers: Box<[Transformer]>,
 }
 
 impl fmt::Display for TransformerExpression {
@@ -349,7 +349,7 @@ impl TransformerExpression {
     pub fn type_for(&self, input: &Type) -> Result<Type, crate::Error> {
         let mut typ = input.clone();
 
-        for transformer in &self.transformers {
+        for transformer in &*self.transformers {
             typ = transformer.type_for(&typ)?;
         }
 
@@ -357,7 +357,7 @@ impl TransformerExpression {
     }
 
     pub fn eval(&self, mut value: Value) -> Value {
-        for transformer in &self.transformers {
+        for transformer in &*self.transformers {
             value = transformer.eval(value);
         }
 

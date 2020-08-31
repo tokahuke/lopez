@@ -260,7 +260,7 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
         }),
         map(
             tuple((tag_whitespace("get"), escaped_string)),
-            |(_, string)| Ok(Transformer::Get(string)),
+            |(_, string)| Ok(Transformer::Get(string.into_boxed_str())),
         ),
         map(tag("flatten"), |_| Ok(Transformer::Flatten)),
         map(
@@ -312,7 +312,11 @@ fn transformer_test() {
 fn transformer_expression(i: &str) -> IResult<&str, Result<TransformerExpression, String>> {
     map(many0(trailing_whitespace(transformer)), |transformers| {
         Ok(TransformerExpression {
-            transformers: transformers.into_iter().collect::<Result<Vec<_>, _>>()?,
+            transformers: {
+                let mut transformers = transformers.into_iter().collect::<Result<Vec<_>, _>>()?;
+                transformers.shrink_to_fit();
+                transformers.into_boxed_slice()
+            },
         })
     })(i)
 }
@@ -328,7 +332,7 @@ fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
         map(tag("id"), |_| Ok(Extractor::Id)),
         map(
             tuple((tag_whitespace("attr"), escaped_string)),
-            |(_, attr)| Ok(Extractor::Attr(attr.to_owned())),
+            |(_, attr)| Ok(Extractor::Attr(attr.into_boxed_str())),
         ),
         map(
             tuple((
@@ -382,7 +386,7 @@ fn extractor_test() {
     assert_eq!(extractor("name"), Ok(("", Ok(Extractor::Name))));
     assert_eq!(
         extractor("attr \"foo\""),
-        Ok(("", Ok(Extractor::Attr("foo".to_owned()))))
+        Ok(("", Ok(Extractor::Attr("foo".to_owned().into_boxed_str()))))
     );
     assert_eq!(extractor("inner-html"), Ok(("", Ok(Extractor::InnerHtml))));
     assert_eq!(
@@ -421,7 +425,7 @@ fn extractor_expression_test() {
         Ok((
             "",
             Ok(ExtractorExpression {
-                extractor: Extractor::Attr("src".to_owned()),
+                extractor: Extractor::Attr("src".to_owned().into_boxed_str()),
                 transformer_expression: TransformerExpression {
                     transformers: vec![Transformer::Capture(ComparableRegex(
                         Regex::from_str("[0-9]+").unwrap()
@@ -458,7 +462,7 @@ fn exploding_extractor_expression_test() {
             Ok(ExplodingExtractorExpression {
                 explodes: true,
                 extractor_expression: ExtractorExpression {
-                    extractor: Extractor::Attr("src".to_owned()),
+                    extractor: Extractor::Attr("src".to_owned().into_boxed_str()),
                     transformer_expression: TransformerExpression {
                         transformers: vec![Transformer::AllCaptures(ComparableRegex(
                             Regex::from_str("[0-9]+").unwrap()
@@ -650,7 +654,7 @@ fn flag_directive_test() {
     assert_eq!(flag_directive(&["foo"])("foo;"), Ok(("", ())));
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RuleSet {
     pub in_page: Option<Regex>,
     pub selector: scraper::Selector,
@@ -846,7 +850,7 @@ fn literal_test() {
     assert_eq!(literal("1234.0"), Ok(("", (1234.0).into())));
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct SetVariable {
     pub name: String,
     pub value: Value,
@@ -908,13 +912,13 @@ pub enum Item {
     Seed(Url),
     Boundary(Boundary),
     Module(Module),
-    RuleSet(RuleSet),
+    RuleSet(Arc<RuleSet>),
     SetVariable(SetVariable),
 }
 
 fn item(i: &str) -> IResult<&str, Result<Item, String>> {
     alt((
-        map(rule_set, |rule_set| Ok(Item::RuleSet(rule_set?))),
+        map(rule_set, |rule_set| Ok(Item::RuleSet(Arc::new(rule_set?)))),
         map(module, |module| Ok(Item::Module(module))),
         map(seed, |seed| Ok(Item::Seed(seed?))),
         map(boundary, |boundary| Ok(Item::Boundary(boundary?))),
