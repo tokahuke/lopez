@@ -236,7 +236,7 @@ impl Directives {
     fn find_invalid_set_variables(&self) -> HashSet<String> {
         let mut invalid = HashSet::new();
 
-        for (_name, module) in &self.modules {
+        for module in self.modules.values() {
             module.find_invalid_set_variables(&mut invalid);
         }
 
@@ -248,7 +248,7 @@ impl Directives {
         let mut set_variables = HashSet::new();
         let mut duplicates = HashSet::new();
 
-        for (_name, module) in &self.modules {
+        for module in self.modules.values() {
             module.find_duplicate_set_variables(&mut set_variables, &mut duplicates);
         }
 

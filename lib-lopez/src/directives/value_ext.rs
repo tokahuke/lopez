@@ -13,8 +13,17 @@ pub fn force_f64(num: &Number) -> f64 {
 }
 
 /// Hashes a JSON value reference
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Eq)]
 pub(crate) struct HashableJsonRef<V: Deref<Target = Value>>(pub V);
+
+impl<V: Deref<Target = Value>> PartialEq for HashableJsonRef<V>
+where
+    V: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 
 impl<V: Deref<Target = Value>> Hash for HashableJsonRef<V> {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
@@ -56,8 +65,14 @@ impl<V: Deref<Target = Value>> Hash for HashableJsonRef<V> {
 }
 
 /// Hashes a JSON value
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Eq)]
 pub(crate) struct HashableJson(pub Value);
+
+impl PartialEq for HashableJson {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 
 impl Hash for HashableJson {
     fn hash<H: Hasher>(&self, hasher: &mut H) {

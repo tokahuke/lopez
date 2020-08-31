@@ -1,15 +1,17 @@
 
 # Welcome to "the Lopez"
+<!-- Badges -->
+[![Apache 2 License](https://img.shields.io/badge/license-Apace%202.0-success)](license) [![](https://img.shields.io/discord/749985629588160623)](https://discord.gg/RuJYHv8) [![Github All Downloads](https://img.shields.io/github/downloads/tokahuke/lopez/total)](https://github.com/tokahuke/lopez/releases/latest/)
+<!-- End badges -->
 
 Crawling and scraping the Web for fun and profit.
-
 ## A word of caution
 
 There is a very tenuous line between a crawl and a DoS attack. Please, be mindful of the crawling speed you inflict on websites! For your convenience, crawling is limited by default to `2.5` hits per second per [origin](https://html.spec.whatwg.org/#origin), which is a good default. You can override this value using the `set max_hits_per_sec` directive in your configuration, but make sure that you will not overload the server (or that you have the permission to do so). Remember: some people's livelihoods depend on these websites and not every site has good DoS mitigation. 
 
 Also, some people may get angry that _you_ are scraping _their_ website and may start annoying you because of that. If they are crazy enough or money is involved, they may even try to prosecute you. And the judicial system is just crazy nowadays, so who knows?
 
-In either case, [I have nothing to do with that](/license). Use this program at your own risk.
+In either case, [I have nothing to do with that](license). Use this program at your own risk.
 
 ## Installing the damn thing
 
@@ -67,6 +69,8 @@ Let's brag a little!
 ## Limitations and future plans
 
 * Lopez is still limited to a single machine. No distributed programming yet. However, what are you scraping that requires so much firepower?
+
+* No JavaScript execution. This is pretty standard, since JavaScript is _heavy_ to run. If it is ever to be supported, it should be opt-in.
 
 * This crate need more docs and more support for other backends. Sorry, I have a full-time job.
 
