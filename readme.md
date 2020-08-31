@@ -1,7 +1,7 @@
 
 # Welcome to "the Lopez"
 <!-- Badges -->
-[![Apache 2 License](https://img.shields.io/badge/license-Apace%202.0-success)](license) [![](https://img.shields.io/discord/749985629588160623)](https://discord.gg/RuJYHv8) [![Github All Downloads](https://img.shields.io/github/downloads/tokahuke/lopez/total)](https://github.com/tokahuke/lopez/releases/latest/)
+[![Apache 2 License](https://img.shields.io/badge/license-Apache%202.0-success)](license) [![](https://img.shields.io/discord/749985629588160623)](https://discord.gg/RuJYHv8) [![Github All Downloads](https://img.shields.io/github/downloads/tokahuke/lopez/total)](https://github.com/tokahuke/lopez/releases/latest/)
 <!-- End badges -->
 
 Crawling and scraping the Web for fun and profit.
