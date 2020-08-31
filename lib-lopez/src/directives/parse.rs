@@ -240,14 +240,15 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
         map(tag("is-null"), |_| Ok(Transformer::IsNull)),
         map(tag("is-not-null"), |_| Ok(Transformer::IsNotNull)),
         map(tag("hash"), |_| Ok(Transformer::Hash)),
+        map(tag("not"), |_| Ok(Transformer::Not)),
         map(tag("as-number"), |_| Ok(Transformer::AsNumber)),
-        map(tuple((tag("greater-than"), double)), |(_, lhs)| {
+        map(tuple((tag_whitespace("greater-than"), double)), |(_, lhs)| {
             Ok(Transformer::GreaterThan(lhs))
         }),
-        map(tuple((tag("lesser-than"), double)), |(_, lhs)| {
+        map(tuple((tag_whitespace("lesser-than"), double)), |(_, lhs)| {
             Ok(Transformer::LesserThan(lhs))
         }),
-        map(tuple((tag("equals"), double)), |(_, lhs)| {
+        map(tuple((tag_whitespace("equals"), double)), |(_, lhs)| {
             Ok(Transformer::Equals(lhs))
         }),
         map(tag("length"), |_| Ok(Transformer::Length)),

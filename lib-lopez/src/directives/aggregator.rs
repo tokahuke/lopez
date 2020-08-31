@@ -148,8 +148,10 @@ impl<'a> AggregatorState<'a> {
             AggregatorState::Count(count) => *count += 1,
             AggregatorState::CountNotNull(extractor, count) => {
                 for value in extractor.extract(element_ref) {
-                    if value.as_bool().unwrap_or(false) {
-                        *count += 1;
+                    match value {
+                        Value::Bool(true) => *count += 1,
+                        Value::Bool(false) | Value::Null => {},
+                        value => self.complain_about(&value), 
                     }
                 }
             }
