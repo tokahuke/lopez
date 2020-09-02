@@ -22,15 +22,15 @@ impl RobotExclusion {
                 .filter(|rule| !rule.allow)
                 .map(|rule| Match::new(&rule.path))
                 .collect::<Vec<_>>(),
-            crawl_delay: my_section
-                .crawl_delay
-                .or_else(|| my_section.req_rate.and_then(|req_rate| {
+            crawl_delay: my_section.crawl_delay.or_else(|| {
+                my_section.req_rate.and_then(|req_rate| {
                     if req_rate.requests > 0 {
                         Some(req_rate.seconds as f64 / req_rate.requests as f64)
                     } else {
                         None
                     }
-                })),
+                })
+            }),
         }
     }
 

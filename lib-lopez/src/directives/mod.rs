@@ -18,10 +18,10 @@ use regex::RegexSet;
 use scraper::Html;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
-use std::sync::Arc;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use url::Url;
 
 use self::aggregator::AggregatorExpressionState;

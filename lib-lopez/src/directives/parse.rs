@@ -243,12 +243,14 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
         map(tag("hash"), |_| Ok(Transformer::Hash)),
         map(tag("not"), |_| Ok(Transformer::Not)),
         map(tag("as-number"), |_| Ok(Transformer::AsNumber)),
-        map(tuple((tag_whitespace("greater-than"), double)), |(_, lhs)| {
-            Ok(Transformer::GreaterThan(lhs))
-        }),
-        map(tuple((tag_whitespace("lesser-than"), double)), |(_, lhs)| {
-            Ok(Transformer::LesserThan(lhs))
-        }),
+        map(
+            tuple((tag_whitespace("greater-than"), double)),
+            |(_, lhs)| Ok(Transformer::GreaterThan(lhs)),
+        ),
+        map(
+            tuple((tag_whitespace("lesser-than"), double)),
+            |(_, lhs)| Ok(Transformer::LesserThan(lhs)),
+        ),
         map(tuple((tag_whitespace("equals"), double)), |(_, lhs)| {
             Ok(Transformer::Equals(lhs))
         }),
@@ -290,6 +292,24 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
         map(
             tuple((tag_whitespace("all-captures"), escaped_string)),
             |(_, regexp)| Ok(Transformer::AllCaptures(ComparableRegex(regex(&regexp)?))),
+        ),
+        map(
+            tuple((tag_whitespace("matches"), escaped_string)),
+            |(_, regexp)| Ok(Transformer::Matches(ComparableRegex(regex(&regexp)?))),
+        ),
+        map(
+            tuple((
+                tag_whitespace("replace"),
+                trailing_whitespace(escaped_string),
+                tag_whitespace("with"),
+                escaped_string,
+            )),
+            |(_, regexp, _, replacer)| {
+                Ok(Transformer::Replace(
+                    ComparableRegex(regex(&regexp)?),
+                    replacer,
+                ))
+            },
         ),
     ))(i)
 }
