@@ -21,14 +21,14 @@ pub mod pretty_print;
 
 pub use ansi_term;
 pub use cli::Profile;
-pub use crawler::{start, test_url};
+pub use crawler::{page_rank, start, test_url};
 pub use directives::Directives;
 pub use error::Error;
 pub use hash::hash;
 pub use logger::init_logger;
 pub use structopt::StructOpt;
 
-pub fn default_user_agent() -> &'static str {
+pub const fn default_user_agent() -> &'static str {
     concat!(
         env!("CARGO_PKG_NAME"),
         "/",
@@ -109,6 +109,16 @@ macro_rules! main {
 
                     // Do the thing!
                     $crate::start(Arc::new(profile), directives, backend).await?;
+                }
+                LopezApp::PageRank { wave_name, config } => {
+                    // Init logging:
+                    $crate::init_logger();
+
+                    // Create backend:
+                    let backend = <$backend_ty>::init(config, &wave_name).await?;
+
+                    // Do the thing.
+                    $crate::page_rank(backend).await?;
                 }
             }
 

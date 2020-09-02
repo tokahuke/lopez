@@ -4,6 +4,10 @@ use std::fmt;
 
 use super::value_ext::force_f64;
 
+// TODO: we can refactor this code. Instead of big useless matches, we can
+// create a relation of default values and default ways of retrieving Rust
+// values from JSON.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Variable {
     UserAgent,
@@ -12,6 +16,7 @@ pub enum Variable {
     MaxHitsPerSec,
     RequestTimeout,
     MaxBodySize,
+    EnablePageRank,
 }
 
 impl fmt::Display for Variable {
@@ -26,6 +31,7 @@ impl fmt::Display for Variable {
                 Variable::MaxHitsPerSec => "max_hits_per_sec",
                 Variable::RequestTimeout => "request_timeout",
                 Variable::MaxBodySize => "max_body_size",
+                Variable::EnablePageRank => "enable_page_rank",
             }
         )
     }
@@ -40,12 +46,22 @@ impl Variable {
             "max_hits_per_sec" => Variable::MaxHitsPerSec,
             "request_timeout" => Variable::RequestTimeout,
             "max_body_size" => Variable::MaxBodySize,
+            "enable_page_rank" => Variable::EnablePageRank,
             _ => return None,
         })
     }
 
     fn bad_value<T>(&self, literal: &Value) -> Result<T, crate::Error> {
         Err(crate::Error::BadSetVariableValue(*self, literal.clone()))
+    }
+
+    fn retrieve_as_bool(&self, literal: Option<&Value>) -> Result<bool, crate::Error> {
+        match (self, literal) {
+            (Variable::EnablePageRank, None) => Ok(true),
+            (Variable::EnablePageRank, Some(Value::Bool(b))) => Ok(*b),
+            (_, Some(literal)) => self.bad_value(literal),
+            _ => panic!("cannot cast as bool: {:?}", self),
+        }
     }
 
     fn retrieve_as_str<'a>(&self, literal: Option<&'a Value>) -> Result<&'a str, crate::Error> {
@@ -124,6 +140,10 @@ pub struct SetVariables {
 }
 
 impl SetVariables {
+    pub fn get_as_bool(&self, name: Variable) -> Result<bool, crate::Error> {
+        name.retrieve_as_bool(self.set_variables.get(&name))
+    }
+
     pub fn get_as_str(&self, name: Variable) -> Result<&str, crate::Error> {
         name.retrieve_as_str(self.set_variables.get(&name))
     }

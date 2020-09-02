@@ -44,18 +44,18 @@ impl Backend for PostgresBackend {
         })
     }
 
-    async fn build_master(&self) -> Result<Self::Master, crate::Error> {
+    async fn build_master(&mut self) -> Result<Self::Master, crate::Error> {
         Ok(PostgresMasterBackend::init(self.config.connect().await?, &self.wave).await?)
     }
 
-    fn build_worker_factory(&self, wave_id: i32) -> Self::WorkerFactory {
+    fn build_worker_factory(&mut self, wave_id: i32) -> Self::WorkerFactory {
         PostgresWorkerFactory {
             config: self.config.clone(),
             wave_id,
         }
     }
 
-    async fn build_ranker(&self, wave_id: i32) -> Result<Self::Ranker, crate::Error> {
+    async fn build_ranker(&mut self, wave_id: i32) -> Result<Self::Ranker, crate::Error> {
         Ok(PostgresPageRanker::init(self.config.connect().await?, wave_id).await?)
     }
 }
@@ -69,7 +69,7 @@ pub struct PostgresWorkerFactory {
 impl WorkerBackendFactory for PostgresWorkerFactory {
     type Error = crate::Error;
     type Worker = PostgresWorkerBackend;
-    async fn build(&self) -> Result<Self::Worker, crate::Error> {
+    async fn build(&mut self) -> Result<Self::Worker, crate::Error> {
         Ok(PostgresWorkerBackend::init(self.config.connect().await?, self.wave_id).await?)
     }
 }

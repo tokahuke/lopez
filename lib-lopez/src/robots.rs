@@ -126,7 +126,8 @@ lazy_static! {
         .expect("can always build robots fetching reqwest::Client");
 }
 
-pub async fn get_robots(base_url: &Url, user_agent: &str) -> Result<Option<String>, crate::Error> {
+/// Tries to get robots.txt for *exactly* that `base_url`.
+async fn do_get_robots(base_url: &Url, user_agent: &str) -> Result<Option<String>, crate::Error> {
     // Make the request.
     let robots_url: Url = base_url.join("/robots.txt")?;
     let response = CLIENT
@@ -138,16 +139,46 @@ pub async fn get_robots(base_url: &Url, user_agent: &str) -> Result<Option<Strin
 
     // Get status and filter failures:
     if status_code.is_success() {
-        Ok(Some(response.text().await?))
+        return Ok(Some(response.text().await?));
     } else {
-        log::warn!("robots route unsuccessful for `{}`", robots_url);
         Ok(None)
     }
 }
 
+/// Tries to get robots.txt for that `base_url`, going up a domain recursively if not found.
+pub async fn get_robots(
+    mut base_url: Url,
+    user_agent: &str,
+) -> Result<Option<String>, crate::Error> {
+    let mut robots = None;
+
+    // If not successful, try one level up:
+    while robots.is_none() {
+        // If successful, return. You are done.
+        if let Some(resolved) = do_get_robots(&base_url, user_agent).await? {
+            robots = Some(resolved);
+        } else if let Some(domain) = base_url.domain().map(str::to_owned) {
+            // If not, move up!
+            let parts_one_up = domain.split(".").skip(1).collect::<Vec<_>>();
+
+            // If it is a top level domain, it already makes no sense:
+            if parts_one_up.len() == 1 {
+                break;
+            }
+
+            // Recurse:
+            base_url
+                .set_host(Some(&parts_one_up.join(".")))
+                .expect("parse error");
+        }
+    }
+
+    Ok(robots)
+}
+
 #[tokio::test]
 async fn test_get_robots() {
-    let robots = get_robots(&"http://querobolsa.com.br".parse().unwrap(), "hello!")
+    let robots = get_robots("http://querobolsa.com.br".parse().unwrap(), "hello!")
         .await
         .unwrap()
         .unwrap();

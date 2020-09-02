@@ -10,6 +10,7 @@ use libflate::gzip::Decoder as GzipDecoder;
 use scraper::{Html, Selector};
 use std::io::Read;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 use url::{ParseError, Url};
 
@@ -139,7 +140,7 @@ pub struct CrawlWorker<WF: WorkerBackendFactory> {
     variables: Arc<SetVariables>,
     analyzer: Analyzer,
     boundaries: Boundaries,
-    worker_backend_factory: Arc<WF>,
+    worker_backend_factory: Arc<Mutex<WF>>,
     origins: Arc<Origins>,
 }
 
@@ -149,7 +150,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         profile: Arc<Profile>,
         variables: Arc<SetVariables>,
         directives: Arc<Directives>,
-        worker_backend_factory: Arc<WF>,
+        worker_backend_factory: Arc<Mutex<WF>>,
         origins: Arc<Origins>,
     ) -> CrawlWorker<WF> {
         let https = HttpsConnector::new();
@@ -440,7 +441,8 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
 
             // Spawn all connections:
             let worker_backends = future::join_all(
-                (0..self.profile.backends_per_worker).map(|_| self.worker_backend_factory.build()),
+                (0..self.profile.backends_per_worker)
+                    .map(|_| async { self.worker_backend_factory.lock().await.build().await }),
             )
             .await
             .into_iter()
