@@ -46,6 +46,15 @@ macro_rules! cli_impl {
                 #[structopt(env)]
                 test_url: String,
             },
+            /// Runs the page rank algorithm on the supplied wave.
+            PageRank {
+                /// The name of this crawl wave. You can still use this command even if you
+                /// have run the crawl with page rank disabled.
+                #[structopt(env)]
+                wave_name: String,
+                #[structopt(flatten)]
+                config: <$backend_ty as Backend>::Config,
+            },
         }
     };
 }

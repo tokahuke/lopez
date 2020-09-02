@@ -20,28 +20,32 @@ pub trait Backend: Sized {
     type Ranker: PageRanker<Error = Self::Error>;
 
     async fn init(config: Self::Config, wave: &str) -> Result<Self, Self::Error>;
-    async fn build_master(&self) -> Result<Self::Master, Self::Error>;
-    fn build_worker_factory(&self, wave_id: i32) -> Self::WorkerFactory;
-    async fn build_ranker(&self, wave_id: i32) -> Result<Self::Ranker, Self::Error>;
+    async fn build_master(&mut self) -> Result<Self::Master, Self::Error>;
+    fn build_worker_factory(&mut self, wave_id: i32) -> Self::WorkerFactory;
+    async fn build_ranker(&mut self, wave_id: i32) -> Result<Self::Ranker, Self::Error>;
 }
 
 #[async_trait(?Send)]
 pub trait MasterBackend {
     type Error: Into<crate::Error>;
 
-    fn wave_id(&self) -> i32;
-    async fn ensure_seeded(&self, seeds: &[Url]) -> Result<(), Self::Error>;
-    async fn create_analyses(&self, analysis_names: &[String]) -> Result<(), Self::Error>;
-    async fn count_crawled(&self) -> Result<usize, Self::Error>;
-    async fn reset_queue(&self) -> Result<(), Self::Error>;
-    async fn fetch(&self, batch_size: i64, max_depth: i16) -> Result<Vec<(Url, u16)>, Self::Error>;
+    fn wave_id(&mut self) -> i32;
+    async fn ensure_seeded(&mut self, seeds: &[Url]) -> Result<(), Self::Error>;
+    async fn create_analyses(&mut self, analysis_names: &[String]) -> Result<(), Self::Error>;
+    async fn count_crawled(&mut self) -> Result<usize, Self::Error>;
+    async fn reset_queue(&mut self) -> Result<(), Self::Error>;
+    async fn fetch(
+        &mut self,
+        batch_size: i64,
+        max_depth: i16,
+    ) -> Result<Vec<(Url, u16)>, Self::Error>;
 }
 
 #[async_trait(?Send)]
 pub trait WorkerBackendFactory: 'static + Send + Sync {
     type Error: Into<crate::Error>;
     type Worker: WorkerBackend<Error = Self::Error>;
-    async fn build(&self) -> Result<Self::Worker, Self::Error>;
+    async fn build(&mut self) -> Result<Self::Worker, Self::Error>;
 }
 
 #[async_trait(?Send)]
@@ -71,11 +75,11 @@ pub trait PageRanker {
     type PageId: Ord + Clone;
 
     async fn linkage(
-        &self,
+        &mut self,
     ) -> Result<Box<dyn Iterator<Item = (Self::PageId, Self::PageId)>>, Self::Error>;
-    async fn push_page_ranks(&self, ranked: &[(Self::PageId, f64)]) -> Result<(), Self::Error>;
+    async fn push_page_ranks(&mut self, ranked: &[(Self::PageId, f64)]) -> Result<(), Self::Error>;
 
-    async fn page_rank(&self) -> Result<(), Self::Error> {
+    async fn page_rank(&mut self) -> Result<(), Self::Error> {
         // Create a stream of links:
         let edges = self.linkage().await?;
 

@@ -1,5 +1,5 @@
 use log4rs::append::console::{ConsoleAppender, Target};
-use log4rs::config::{Appender, Config, Root};
+use log4rs::config::{Appender, Config, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
 
 pub fn init_logger() -> log4rs::Handle {
@@ -12,6 +12,7 @@ pub fn init_logger() -> log4rs::Handle {
 
     let config = Config::builder()
         .appender(Appender::builder().build("stderr", Box::new(console)))
+        .logger(Logger::builder().build("hyper_rustls", log::LevelFilter::Debug))
         .build(
             Root::builder()
                 .appender("stderr")

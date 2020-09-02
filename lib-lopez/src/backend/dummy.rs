@@ -28,15 +28,15 @@ impl Backend for DummyBackend {
         Ok(DummyBackend {})
     }
 
-    async fn build_master(&self) -> Result<Self::Master, Self::Error> {
+    async fn build_master(&mut self) -> Result<Self::Master, Self::Error> {
         Ok(DummyMasterBackend {})
     }
 
-    fn build_worker_factory(&self, _wave_id: i32) -> Self::WorkerFactory {
+    fn build_worker_factory(&mut self, _wave_id: i32) -> Self::WorkerFactory {
         DummyWorkerBackendFactory {}
     }
 
-    async fn build_ranker(&self, _wave_id: i32) -> Result<Self::Ranker, Self::Error> {
+    async fn build_ranker(&mut self, _wave_id: i32) -> Result<Self::Ranker, Self::Error> {
         Ok(DummyPageRanker {})
     }
 }
@@ -45,28 +45,28 @@ impl Backend for DummyBackend {
 impl MasterBackend for DummyMasterBackend {
     type Error = crate::Error;
 
-    fn wave_id(&self) -> i32 {
+    fn wave_id(&mut self) -> i32 {
         0
     }
 
-    async fn ensure_seeded(&self, _seeds: &[Url]) -> Result<(), Self::Error> {
+    async fn ensure_seeded(&mut self, _seeds: &[Url]) -> Result<(), Self::Error> {
         panic!("cannot use DummyMasterBackend");
     }
 
-    async fn create_analyses(&self, _analysis_names: &[String]) -> Result<(), Self::Error> {
+    async fn create_analyses(&mut self, _analysis_names: &[String]) -> Result<(), Self::Error> {
         panic!("cannot use DummyMasterBackend");
     }
 
-    async fn count_crawled(&self) -> Result<usize, Self::Error> {
+    async fn count_crawled(&mut self) -> Result<usize, Self::Error> {
         panic!("cannot use DummyMasterBackend");
     }
 
-    async fn reset_queue(&self) -> Result<(), Self::Error> {
+    async fn reset_queue(&mut self) -> Result<(), Self::Error> {
         panic!("cannot use DummyMasterBackend");
     }
 
     async fn fetch(
-        &self,
+        &mut self,
         _batch_size: i64,
         _max_depth: i16,
     ) -> Result<Vec<(Url, u16)>, Self::Error> {
@@ -79,7 +79,7 @@ impl WorkerBackendFactory for DummyWorkerBackendFactory {
     type Error = crate::Error;
     type Worker = DummyWorkerBackend;
 
-    async fn build(&self) -> Result<Self::Worker, Self::Error> {
+    async fn build(&mut self) -> Result<Self::Worker, Self::Error> {
         Ok(DummyWorkerBackend {})
     }
 }
@@ -117,12 +117,15 @@ impl PageRanker for DummyPageRanker {
     type PageId = i32;
 
     async fn linkage(
-        &self,
+        &mut self,
     ) -> Result<Box<dyn Iterator<Item = (Self::PageId, Self::PageId)>>, Self::Error> {
         panic!("cannot use DummyPageRanker");
     }
 
-    async fn push_page_ranks(&self, _ranked: &[(Self::PageId, f64)]) -> Result<(), Self::Error> {
+    async fn push_page_ranks(
+        &mut self,
+        _ranked: &[(Self::PageId, f64)],
+    ) -> Result<(), Self::Error> {
         panic!("cannot use DummyPageRanker");
     }
 }

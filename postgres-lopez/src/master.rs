@@ -63,11 +63,11 @@ impl PostgresMasterBackend {
 impl MasterBackend for PostgresMasterBackend {
     type Error = crate::Error;
 
-    fn wave_id(&self) -> i32 {
+    fn wave_id(&mut self) -> i32 {
         self.wave_id
     }
 
-    async fn ensure_seeded(&self, seeds: &[Url]) -> Result<(), crate::Error> {
+    async fn ensure_seeded(&mut self, seeds: &[Url]) -> Result<(), crate::Error> {
         let wave_id = self.wave_id;
         let page_ids = seeds
             .iter()
@@ -88,14 +88,14 @@ impl MasterBackend for PostgresMasterBackend {
         Ok(())
     }
 
-    async fn create_analyses(&self, analysis_names: &[String]) -> Result<(), crate::Error> {
+    async fn create_analyses(&mut self, analysis_names: &[String]) -> Result<(), crate::Error> {
         let params = params![self.wave_id, analysis_names];
         self.client.execute(&self.create_analyses, params).await?;
 
         Ok(())
     }
 
-    async fn count_crawled(&self) -> Result<usize, crate::Error> {
+    async fn count_crawled(&mut self) -> Result<usize, crate::Error> {
         let wave_id = self.wave_id;
         let crawled = self
             .client
@@ -109,7 +109,7 @@ impl MasterBackend for PostgresMasterBackend {
         Ok(crawled)
     }
 
-    async fn reset_queue(&self) -> Result<(), crate::Error> {
+    async fn reset_queue(&mut self) -> Result<(), crate::Error> {
         let wave_id = self.wave_id;
         self.client.execute(&self.reset_queue, &[&wave_id]).await?;
 
@@ -117,7 +117,7 @@ impl MasterBackend for PostgresMasterBackend {
     }
 
     async fn fetch(
-        &self,
+        &mut self,
         batch_size: i64,
         max_depth: i16,
     ) -> Result<Vec<(Url, u16)>, crate::Error> {

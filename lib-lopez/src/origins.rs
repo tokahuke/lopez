@@ -7,7 +7,7 @@ use url::{Origin as UrlOrigin, Url};
 use crate::robots::{get_robots, RobotExclusion};
 
 pub struct Origin {
-    _base_url: Option<Url>,
+    // _base_url: Option<Url>,
     exclusion: Option<RobotExclusion>,
     crawl_delay: Duration,
     block_until: Mutex<Delay>,
@@ -20,7 +20,7 @@ impl Origin {
         user_agent: &str,
     ) -> Origin {
         let base_url = url_origin.ascii_serialization().parse::<Url>().ok();
-        let exclusion = if let Some(base_url) = base_url.as_ref() {
+        let exclusion = if let Some(base_url) = base_url {
             get_robots(base_url, user_agent)
                 .await
                 .ok()
@@ -42,7 +42,7 @@ impl Origin {
         let block_until = Mutex::new(time::delay_for(crawl_delay));
 
         Origin {
-            _base_url: base_url,
+            // _base_url: base_url,
             exclusion,
             crawl_delay,
             block_until,

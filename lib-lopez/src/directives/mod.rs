@@ -268,6 +268,7 @@ impl Directives {
                 .get_as_positive_f64(Variable::RequestTimeout)
                 .err(),
             variables.get_as_u64(Variable::MaxBodySize).err(),
+            variables.get_as_bool(Variable::EnablePageRank).err(),
         ];
 
         tests

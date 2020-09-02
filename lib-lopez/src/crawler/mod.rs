@@ -8,6 +8,7 @@ pub(crate) use worker::{Crawled, ReportType, TestRunReport};
 
 use futures::prelude::*;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 use url::Url;
 
@@ -23,7 +24,7 @@ use self::worker::CrawlWorker;
 pub async fn start<B: Backend>(
     profile: Arc<Profile>,
     directives: Arc<Directives>,
-    backend: B,
+    mut backend: B,
 ) -> Result<(), crate::Error> {
     // Set panics to be logged:
     crate::panic::log_panics();
@@ -43,8 +44,9 @@ pub async fn start<B: Backend>(
     ));
 
     // Load data model:
-    let master_model = backend.build_master().await.map_err(|err| err.into())?;
-    let worker_model_factory = Arc::new(backend.build_worker_factory(master_model.wave_id()));
+    let mut master_model = backend.build_master().await.map_err(|err| err.into())?;
+    let wave_id = master_model.wave_id();
+    let worker_model_factory = Arc::new(Mutex::new(backend.build_worker_factory(wave_id)));
 
     // Creates a counter to get stats:
     let counter = Arc::new(Counter::default());
@@ -56,7 +58,7 @@ pub async fn start<B: Backend>(
         .await
         .map_err(|err| err.into())?;
     let remaining_quota =
-        (variables.get_as_u64(Variable::Quota)? as usize).saturating_sub(consumed);
+        (variables.get_as_u64(Variable::Quota).expect("bad val") as usize).saturating_sub(consumed);
 
     // Spawn task that will log stats from time to time:
     let _stats_handle = tokio::spawn(log_stats(
@@ -86,12 +88,12 @@ pub async fn start<B: Backend>(
     // Ensure that the search was started:
     let seeds = directives.seeds();
     log::info!(
-        "Seeding: \n\t- {}",
+        "Seeding:\n    {}",
         seeds
             .iter()
             .map(|seed| seed.as_str())
             .collect::<Vec<_>>()
-            .join("\n\t- ")
+            .join("\n    ")
     );
     master_model
         .ensure_seeded(&directives.seeds())
@@ -187,20 +189,39 @@ pub async fn start<B: Backend>(
     if !is_interrupted {
         log::info!("crawl done");
 
-        // Now, do page rank.
-        backend
-            .build_ranker(master_model.wave_id())
-            .await
-            .map_err(|err| err.into())?
-            .page_rank()
-            .await
-            .map_err(|err| err.into())?;
+        // Now, do page rank, if enabled:
+        if variables
+            .get_as_bool(Variable::EnablePageRank)
+            .expect("bad val")
+        {
+            page_rank_for_wave_id(&mut backend, wave_id).await?
+        }
 
         Ok(())
     } else {
         log::info!("crawl was interrupted");
         Err(crate::Error::Custom("crawl was interrupted".to_owned()))
     }
+}
+
+/// Runs the PageRank algorithm on a given wave, given an existing master backend.
+async fn page_rank_for_wave_id<B: Backend>(
+    backend: &mut B,
+    wave_id: i32,
+) -> Result<(), crate::Error> {
+    backend
+        .build_ranker(wave_id)
+        .await
+        .map_err(|err| err.into())?
+        .page_rank()
+        .await
+        .map_err(|err| err.into())?;
+    Ok(())
+}
+
+pub async fn page_rank<B: Backend>(mut backend: B) -> Result<(), crate::Error> {
+    let mut master_model = backend.build_master().await.map_err(|err| err.into())?;
+    page_rank_for_wave_id(&mut backend, master_model.wave_id()).await
 }
 
 /// Tests a URL and says what is happening.
@@ -224,12 +245,14 @@ pub async fn test_url(
     ));
 
     // Load dummy data model:
-    let backend = crate::backend::DummyBackend::default();
-    let master_model = backend
+    let mut backend = crate::backend::DummyBackend::default();
+    let mut master_model = backend
         .build_master()
         .await
         .expect("can always build DummyMasterBackend");
-    let worker_model_factory = Arc::new(backend.build_worker_factory(master_model.wave_id()));
+    let worker_model_factory = Arc::new(Mutex::new(
+        backend.build_worker_factory(master_model.wave_id()),
+    ));
 
     // Creates a counter to get stats:
     let counter = Arc::new(Counter::default());
