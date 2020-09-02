@@ -17,6 +17,7 @@ mod robots;
 #[macro_use]
 mod cli;
 mod logger;
+pub mod pretty_print;
 
 pub use ansi_term;
 pub use cli::Profile;
@@ -87,7 +88,7 @@ macro_rules! main {
                                     .await;
 
                             // Show report (TODO bad representation! make something pretty):
-                            println!("{:#?}", report);
+                            report.pretty_print();
                         }
                     }
                 }

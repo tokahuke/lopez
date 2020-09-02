@@ -8,9 +8,10 @@ edition = "2018"
 
 [dependencies]
 # Networking and Web stuff:
-hyper-tls = "0.4.3"
+# hyper-tls = "0.4.3"
+hyper-rustls = "0.21.0"
 hyper = "0.13.7"
-reqwest = "0.10.7"
+reqwest = { version = "0.10.8", features = ["rustls-tls"], default-features = false }
 scraper = "0.12.0"
 url = "2.1.1"
 http = "0.2.1"
@@ -19,7 +20,7 @@ robots_txt = "0.7.0"
 
 # Runtime:
 futures = "0.3.5"
-rayon = "1.3.1"
+rayon = "1.4.0"
 tokio = { version = "0.2.22", features = ["macros", "rt-core", "rt-util"] }
 
 # Serialization:
@@ -40,7 +41,8 @@ failure = "0.1.8"
 failure_derive = "0.1.8"
 async-trait = "0.1.38"
 structopt = "0.3.16"
-ansi_term = "0.11"
+ansi_term = "0.12"
 log4rs = "0.13.0"
 cached = { version = "0.18.0", default-features = false }
 smallvec = "1.4.2"
+colored_json = "2.1.0"

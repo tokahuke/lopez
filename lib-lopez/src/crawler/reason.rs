@@ -15,3 +15,29 @@ impl ToString for Reason {
         .to_owned()
     }
 }
+
+impl Reason {
+    pub fn is_ahref(&self) -> bool {
+        if let Reason::Ahref = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_canonical(&self) -> bool {
+        if let Reason::Canonical = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_redirect(&self) -> bool {
+        if let Reason::Redirect = self {
+            true
+        } else {
+            false
+        }
+    }
+}

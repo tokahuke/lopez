@@ -45,10 +45,7 @@ impl Variable {
     }
 
     fn bad_value<T>(&self, literal: &Value) -> Result<T, crate::Error> {
-        Err(crate::Error::BadSetVariableValue(
-            *self,
-            literal.clone(),
-        ))
+        Err(crate::Error::BadSetVariableValue(*self, literal.clone()))
     }
 
     fn retrieve_as_str<'a>(&self, literal: Option<&'a Value>) -> Result<&'a str, crate::Error> {

@@ -4,6 +4,7 @@ mod worker;
 
 pub use counter::Counter;
 pub use reason::Reason;
+pub(crate) use worker::{Crawled, ReportType, TestRunReport};
 
 use futures::prelude::*;
 use std::sync::Arc;
@@ -16,7 +17,7 @@ use crate::directives::{Directives, Variable};
 use crate::origins::Origins;
 
 use self::counter::log_stats;
-use self::worker::{CrawlWorker, TestRunReport};
+use self::worker::CrawlWorker;
 
 /// Does the crawling.
 pub async fn start<B: Backend>(
@@ -207,7 +208,7 @@ pub async fn test_url(
     profile: Arc<Profile>,
     directives: Arc<Directives>,
     url: Url,
-) -> Result<TestRunReport, crate::Error> {
+) -> TestRunReport {
     // Get the set-variables definitions:
     let variables = Arc::new(directives.set_variables());
 
@@ -233,7 +234,7 @@ pub async fn test_url(
     // Creates a counter to get stats:
     let counter = Arc::new(Counter::default());
 
-    Ok(CrawlWorker::new(
+    CrawlWorker::new(
         counter,
         profile,
         variables,
@@ -242,5 +243,5 @@ pub async fn test_url(
         origins,
     )
     .test_url(url)
-    .await)
+    .await
 }

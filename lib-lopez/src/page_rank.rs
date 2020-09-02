@@ -89,36 +89,30 @@ where
 
                 (min_j, batch)
             })
-            .fold(
-                BTreeMap::<_, Vec<f32>>::new,
-                |mut acc, (min_j, batch)| {
-                    acc.entry(min_j)
+            .fold(BTreeMap::<_, Vec<f32>>::new, |mut acc, (min_j, batch)| {
+                acc.entry(min_j)
+                    .and_modify(|existing| {
+                        for (existing, new) in existing.iter_mut().zip(&batch) {
+                            *existing += *new;
+                        }
+                    })
+                    .or_insert(batch);
+
+                acc
+            })
+            .reduce(BTreeMap::<_, Vec<f32>>::new, |mut a, b| {
+                for (min_j, batch) in b {
+                    a.entry(min_j)
                         .and_modify(|existing| {
-                            for (existing, new) in existing.iter_mut().zip(&batch) {
-                                *existing += *new;
+                            for (partial, new) in existing.iter_mut().zip(&batch) {
+                                *partial += *new;
                             }
                         })
                         .or_insert(batch);
+                }
 
-                    acc
-                },
-            )
-            .reduce(
-                BTreeMap::<_, Vec<f32>>::new,
-                |mut a, b| {
-                    for (min_j, batch) in b {
-                        a.entry(min_j)
-                            .and_modify(|existing| {
-                                for (partial, new) in existing.iter_mut().zip(&batch) {
-                                    *partial += *new;
-                                }
-                            })
-                            .or_insert(batch);
-                    }
-
-                    a
-                },
-            );
+                a
+            });
 
         // Find out lost juice:
         let lost_juice = state

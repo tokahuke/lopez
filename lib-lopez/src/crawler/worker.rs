@@ -3,7 +3,7 @@ use futures::future;
 use futures::prelude::*;
 use http::Request;
 use hyper::{client::HttpConnector, Body, Client, StatusCode};
-use hyper_tls::HttpsConnector;
+use hyper_rustls::HttpsConnector;
 use lazy_static::lazy_static;
 use libflate::deflate::Decoder as DeflateDecoder;
 use libflate::gzip::Decoder as GzipDecoder;
@@ -102,7 +102,7 @@ pub(crate) enum Hit {
 }
 
 #[derive(Debug)]
-pub enum Crawled {
+pub(crate) enum Crawled {
     Success {
         status_code: StatusCode,
         links: Vec<(Reason, Url)>,
@@ -121,12 +121,12 @@ pub enum Crawled {
 
 #[derive(Debug)]
 pub struct TestRunReport {
-    actual_url: Url,
-    report: ReportType,
+    pub(crate) actual_url: Url,
+    pub(crate) report: ReportType,
 }
 
 #[derive(Debug)]
-pub enum ReportType {
+pub(crate) enum ReportType {
     DisallowedByDirectives,
     DisallowedByOrigin,
     Crawled(Crawled),
@@ -186,8 +186,8 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                     .expect("bad val"),
             )
             .header("Accept-Encoding", "gzip, deflate")
-            .header("Connection", "Keep-Alive")
-            .header("Keep-Alive", format!("timeout={}, max=100", 10))
+            // .header("Connection", "Keep-Alive")
+            // .header("Keep-Alive", format!("timeout={}, max=100", 10))
             .body(Body::from(""))
             .expect("unreachable");
 
@@ -266,7 +266,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         }
     }
 
-    pub async fn crawl(&self, page_url: &Url) -> Crawled {
+    pub(crate) async fn crawl(&self, page_url: &Url) -> Crawled {
         // Now, this is the active part until the end:
         // NOTE TO SELF: DO NOT RETURN EARLY IN THIS FUNCTION.
         self.task_counter.inc_active();
@@ -335,7 +335,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         crawled
     }
 
-    pub async fn store(
+    pub(crate) async fn store(
         &self,
         worker_backend: &WF::Worker,
         page_url: &Url,
@@ -447,11 +447,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| err.into())?
             .into_iter()
-            // .map(|worker_backend| worker_backend)
             .collect::<Vec<_>>();
-
-            // // Now, become a reference count:
-            // let worker_rc = Rc::new(self);
 
             // NOTE: do not ever, EVER, filter elements of this stream!
             // You risk making the master never finish and that is Big Trouble (tm).

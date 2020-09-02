@@ -151,8 +151,8 @@ impl<'a> AggregatorState<'a> {
                 for value in extractor.extract(element_ref) {
                     match value {
                         Value::Bool(true) => *count += 1,
-                        Value::Bool(false) | Value::Null => {},
-                        value => self.complain_about(&value), 
+                        Value::Bool(false) | Value::Null => {}
+                        value => self.complain_about(&value),
                     }
                 }
             }
@@ -170,12 +170,7 @@ impl<'a> AggregatorState<'a> {
                 values.extend(extractor.extract(element_ref));
             }
             AggregatorState::Distinct(extractor, values) => {
-                values.extend(
-                    extractor
-                        .extract(element_ref)
-                        .into_iter()
-                        .map(HashableJson),
-                );
+                values.extend(extractor.extract(element_ref).into_iter().map(HashableJson));
             }
             AggregatorState::Sum(extractor, sum) => {
                 for value in extractor.extract(element_ref) {

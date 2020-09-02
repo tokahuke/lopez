@@ -133,13 +133,15 @@ pub enum Transformer {
     Flatten,
     Each(TransformerExpression),
     Filter(TransformerExpression),
-    
+
     // String manipulation
     Pretty,
 
     // Regex:
     Capture(ComparableRegex),
     AllCaptures(ComparableRegex),
+    Matches(ComparableRegex),
+    Replace(ComparableRegex, String),
 }
 
 impl fmt::Display for Transformer {
@@ -166,6 +168,12 @@ impl fmt::Display for Transformer {
             Transformer::Pretty => write!(f, "pretty"),
             Transformer::AllCaptures(ComparableRegex(regex)) => {
                 write!(f, "all-captures {:?}", regex.as_str())
+            }
+            Transformer::Matches(ComparableRegex(regex)) => {
+                write!(f, "matches {:?}", regex.as_str())
+            }
+            Transformer::Replace(ComparableRegex(regex), replacer) => {
+                write!(f, "replace {:?} with {:?}", regex, replacer)
             }
         }
     }
@@ -226,6 +234,8 @@ impl Transformer {
             (Transformer::AllCaptures(_), Type::String) => {
                 Ok(Type::Array(Box::new(Type::Map(Box::new(Type::String)))))
             }
+            (Transformer::Matches(_), Type::String) => Ok(Type::Bool),
+            (Transformer::Replace(_, _), Type::String) => Ok(Type::String),
             (_, _) => self.type_error(input),
         }
     }
@@ -251,7 +261,9 @@ impl Transformer {
                 .unwrap_or(Value::Null),
             (&Transformer::GreaterThan(rhs), Value::Number(lhs)) => (force_f64(&lhs) > rhs).into(),
             (&Transformer::LesserThan(rhs), Value::Number(lhs)) => (force_f64(&lhs) < rhs).into(),
-            (&Transformer::Equals(rhs), Value::Number(lhs)) => ((force_f64(&lhs) - rhs).abs() < std::f64::EPSILON).into(),
+            (&Transformer::Equals(rhs), Value::Number(lhs)) => {
+                ((force_f64(&lhs) - rhs).abs() < std::f64::EPSILON).into()
+            }
             (Transformer::Length, Value::Array(array)) => array.len().into(),
             (Transformer::Length, Value::String(string)) => string.len().into(),
             (Transformer::Length, Value::Object(object)) => object.len().into(),
@@ -267,7 +279,7 @@ impl Transformer {
             (Transformer::Flatten, Value::Array(array)) => {
                 let flattened = array
                     .into_iter()
-                    .filter_map(|element|match element {
+                    .filter_map(|element| match element {
                         Value::Array(array) => Some(array),
                         Value::Null => None,
                         value => self.complain_about(&value),
@@ -315,6 +327,15 @@ impl Transformer {
                 .map(|captures| capture_json(&regex, captures))
                 .collect::<Vec<_>>()
                 .into(),
+            (Transformer::Matches(ComparableRegex(regex)), Value::String(string)) => {
+                regex.is_match(&string).into()
+            }
+            (Transformer::Replace(ComparableRegex(regex), replacer), Value::String(string)) => {
+                regex
+                    .replace_all(&string, replacer.as_str())
+                    .into_owned()
+                    .into()
+            }
             (_, Value::Null) => Value::Null,
             (transformer, value) => panic!("type checked: {:?} {:?}", transformer, value),
         }
