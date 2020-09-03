@@ -268,10 +268,6 @@
           <key>include</key>
           <string>#string</string>
         </dict>
-        <dict>
-          <key>include</key>
-          <string>#numeric</string>
-        </dict>
        </array>
     </dict>
     <key>main__4</key>
@@ -286,9 +282,15 @@
       <array> 
         <dict>
           <key>match</key>
-          <string>(\b\d+)</string>
+          <string>(\b[0-9_]+e?[\x{002b}-]\d+)</string>
           <key>name</key>
           <string>constant.numeric.lcd</string>
+        </dict>
+        <dict>
+          <key>match</key>
+          <string>(true|false)</string>
+          <key>name</key>
+          <string>keyword.lcd</string>
         </dict>
        </array>
     </dict>
@@ -318,11 +320,11 @@
           <key>match</key>
           <string>(name|text|html|inner-html|attrs?|classes|id|parent|children|select-any|select-all)</string>
           <key>name</key>
-          <string>variable.lcd</string>
+          <string>entity.name.function.lcd</string>
         </dict>
         <dict>
           <key>match</key>
-          <string>(is-null|is-not-null|hash|not|as-number|greater-than|lesser-than|equals|length|get|flatten|each|filter|pretty|capture|all-captures|replace)</string>
+          <string>(is-null|is-not-null|hash|not|as-number|greater-than|lesser-than|equals|length|is-empty|get|flatten|each|filter|pretty|capture|all-captures|matches|replace|with)</string>
           <key>name</key>
           <string>entity.name.function.lcd</string>
         </dict>

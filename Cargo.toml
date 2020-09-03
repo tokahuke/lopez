@@ -1,6 +1,7 @@
 [profile.release]
-# debug = true
+debug = false
 lto = "thin"
+opt-level = "s"
 
 [workspace]
 
