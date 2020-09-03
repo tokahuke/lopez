@@ -7,8 +7,11 @@ use crate::directives::{SetVariables, Variable};
 
 #[derive(Debug, Default)]
 pub struct Counter {
+    /// All tasks in progress.
     open_count: AtomicUsize,
+    /// All tasks finished, no matter the outcome.
     closed_count: AtomicUsize,
+    /// All tasks finished with error.
     error_count: AtomicUsize,
     active_count: AtomicUsize,
     download_count: AtomicUsize,
@@ -27,9 +30,14 @@ impl Counter {
         self.error_count.fetch_add(1, Ordering::Release); // gulp! atomics.
     }
 
-    /// closed + error
-    pub fn n_done(&self) -> usize {
-        self.closed_count.load(Ordering::Acquire) + self.error_count.load(Ordering::Acquire)
+    /// closed
+    pub fn n_closed(&self) -> usize {
+        self.closed_count.load(Ordering::Acquire)
+    }
+
+    /// error
+    pub fn n_error(&self) -> usize {
+        self.error_count.load(Ordering::Acquire)
     }
 
     pub fn inc_active(&self) {
@@ -107,7 +115,7 @@ impl StatsTracker {
         let stats = Stats {
             n_active: self.counter.n_active(),
             n_done: FromTotal(
-                self.counter.n_done() + self.already_done,
+                self.already_done + self.counter.n_closed() - self.counter.n_error(),
                 self.quota as usize,
             ),
             n_errors: FromTotal(
@@ -115,7 +123,7 @@ impl StatsTracker {
                 self.quota as usize,
             ),
             hit_rate: Human(
-                (self.counter.n_done() + self.already_done
+                (self.already_done + self.counter.n_closed() - self.counter.n_error()
                     - self
                         .last
                         .as_ref()

@@ -397,6 +397,9 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                     .ensure_error(page_url)
                     .await
                     .map_err(|err| err.into())?;
+                
+                // This needs to be the last thing (because of `?`).
+                self.task_counter.register_error();
             }
             Crawled::TimedOut => {
                 log::debug!("at {}: got timeout", page_url);
@@ -404,6 +407,9 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                     .ensure_error(page_url)
                     .await
                     .map_err(|err| err.into())?;
+                
+                // This needs to be the last thing (because of `?`).
+                self.task_counter.register_error();
             }
         }
 
@@ -472,12 +478,13 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                             )
                             .await;
 
+                        // Register close, no matter the status.
+                        worker_ref.task_counter.register_closed();
+                        
                         // Now, analyze results:
                         if let Err(error) = result {
                             worker_ref.task_counter.register_error();
                             log::debug!("while crawling `{}` got: {}", page_url, error);
-                        } else {
-                            worker_ref.task_counter.register_closed();
                         }
                     },
                 )

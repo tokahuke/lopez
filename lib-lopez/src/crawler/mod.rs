@@ -130,7 +130,7 @@ pub async fn start<B: Backend>(
                 // TODO this is most probably buggy in a very, very clever way...
                 if batch.is_empty() {
                     // If everything sent is done (or error), then... go away!
-                    if n_sent == counter.n_done() {
+                    if n_sent == counter.n_closed() {
                         if has_been_empty {
                             log::info!(
                                 "number of sents and dones are equal and the queue \
@@ -164,7 +164,7 @@ pub async fn start<B: Backend>(
                     }
 
                     // Stop if quota is reached:
-                    if counter.n_done() >= remaining_quota {
+                    if counter.n_closed() >= remaining_quota {
                         log::info!("quota of {} reached", remaining_quota + consumed);
                         break 'master;
                     }
