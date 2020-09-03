@@ -11,7 +11,7 @@ edition = "2018"
 # hyper-tls = "0.4.3"
 hyper-rustls = "0.21.0"
 hyper = "0.13.7"
-reqwest = { version = "0.10.8", features = ["rustls-tls"], default-features = false }
+# reqwest = { version = "0.10.8", features = ["rustls-tls"], default-features = false }
 scraper = "0.12.0"
 url = "2.1.1"
 http = "0.2.1"

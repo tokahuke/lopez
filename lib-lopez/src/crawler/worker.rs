@@ -175,7 +175,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         }
     }
 
-    async fn download<'a>(&'a self, page_url: &'a Url) -> Result<Hit, crate::Error> {
+    pub(crate) async fn download<'a>(&'a self, page_url: &'a Url) -> Result<Hit, crate::Error> {
         // Make the request.
         let uri: hyper::Uri = page_url.as_str().parse()?; // uh! patchy
         let builder = Request::get(uri);
@@ -231,7 +231,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                     .get_as_u64(Variable::MaxBodySize)
                     .expect("bad val") as usize;
                 if content.len() + chunk.len() > max_body_size {
-                    log::warn!("at {}: Got very big body. Truncating...", page_url);
+                    log::debug!("at {}: Got very big body. Truncating...", page_url);
 
                     let truncated = &chunk[..max_body_size - content.len()];
                     self.task_counter.add_to_download_count(truncated.len());
@@ -267,7 +267,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         }
     }
 
-    pub(crate) async fn crawl(&self, page_url: &Url) -> Crawled {
+    async fn crawl(&self, page_url: &Url) -> Crawled {
         // Now, this is the active part until the end:
         // NOTE TO SELF: DO NOT RETURN EARLY IN THIS FUNCTION.
         self.task_counter.inc_active();
@@ -336,7 +336,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         crawled
     }
 
-    pub(crate) async fn store(
+    async fn store(
         &self,
         worker_backend: &WF::Worker,
         page_url: &Url,
@@ -392,14 +392,14 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                 Err(err) => log::debug!("at {}: {}", page_url, err),
             },
             Crawled::Error(error) => {
-                log::warn!("at {} got: {}", page_url, error);
+                log::debug!("at {} got: {}", page_url, error);
                 worker_backend
                     .ensure_error(page_url)
                     .await
                     .map_err(|err| err.into())?;
             }
             Crawled::TimedOut => {
-                log::warn!("at {}: got timeout", page_url);
+                log::debug!("at {}: got timeout", page_url);
                 worker_backend
                     .ensure_error(page_url)
                     .await
@@ -417,7 +417,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         depth: u16,
     ) -> Result<(), crate::Error> {
         // Get origin:
-        let origin = self.origins.get_origin_for_url(&page_url).await;
+        let origin = self.origins.get_origin_for_url(&self, &page_url).await;
 
         // Do not do anything if disallowed:
         if !origin.allows(page_url) {
@@ -475,7 +475,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                         // Now, analyze results:
                         if let Err(error) = result {
                             worker_ref.task_counter.register_error();
-                            log::warn!("while crawling `{}` got: {}", page_url, error);
+                            log::debug!("while crawling `{}` got: {}", page_url, error);
                         } else {
                             worker_ref.task_counter.register_closed();
                         }
@@ -502,7 +502,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         }
 
         // Get origin:
-        let origin = self.origins.get_origin_for_url(&actual_url).await;
+        let origin = self.origins.get_origin_for_url(&self, &actual_url).await;
 
         // Do not do anything if disallowed:
         if !origin.allows(&actual_url) {

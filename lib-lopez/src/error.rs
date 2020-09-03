@@ -5,8 +5,8 @@ use std::io;
 pub enum Error {
     #[fail(display = "http error: {}", _0)]
     Http(hyper::Error),
-    #[fail(display = "request error: {}", _0)]
-    Reqwest(reqwest::Error),
+    // #[fail(display = "request error: {}", _0)]
+    // Reqwest(reqwest::Error),
     #[fail(display = "invalid uri: {}", _0)]
     InvalidUri(http::uri::InvalidUri),
     #[fail(display = "url parse error: {}", _0)]
@@ -27,11 +27,11 @@ pub enum Error {
     Custom(String),
 }
 
-impl From<reqwest::Error> for Error {
-    fn from(this: reqwest::Error) -> Error {
-        Error::Reqwest(this)
-    }
-}
+// impl From<reqwest::Error> for Error {
+//     fn from(this: reqwest::Error) -> Error {
+//         Error::Reqwest(this)
+//     }
+// }
 
 impl From<hyper::Error> for Error {
     fn from(this: hyper::Error) -> Error {
