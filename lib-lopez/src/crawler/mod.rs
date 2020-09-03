@@ -4,7 +4,7 @@ mod worker;
 
 pub use counter::Counter;
 pub use reason::Reason;
-pub(crate) use worker::{Crawled, ReportType, TestRunReport};
+pub(crate) use worker::{CrawlWorker, Crawled, Hit, ReportType, TestRunReport};
 
 use futures::prelude::*;
 use std::sync::Arc;
@@ -18,7 +18,6 @@ use crate::directives::{Directives, Variable};
 use crate::origins::Origins;
 
 use self::counter::log_stats;
-use self::worker::CrawlWorker;
 
 /// Does the crawling.
 pub async fn start<B: Backend>(
@@ -37,10 +36,6 @@ pub async fn start<B: Backend>(
         variables
             .get_as_positive_f64(Variable::MaxHitsPerSec)
             .expect("bad val"),
-        variables
-            .get_as_str(Variable::UserAgent)
-            .expect("bad val")
-            .to_owned(),
     ));
 
     // Load data model:
@@ -238,10 +233,6 @@ pub async fn test_url(
         variables
             .get_as_positive_f64(Variable::MaxHitsPerSec)
             .expect("bad val"),
-        variables
-            .get_as_str(Variable::UserAgent)
-            .expect("bad val")
-            .to_owned(),
     ));
 
     // Load dummy data model:

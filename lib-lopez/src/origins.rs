@@ -4,6 +4,8 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::time::{self, Delay, Duration};
 use url::{Origin as UrlOrigin, Url};
 
+use crate::backend::WorkerBackendFactory;
+use crate::crawler::CrawlWorker;
 use crate::robots::{get_robots, RobotExclusion};
 
 pub struct Origin {
@@ -14,14 +16,17 @@ pub struct Origin {
 }
 
 impl Origin {
-    async fn load(
+    async fn load<WF>(
+        worker: &CrawlWorker<WF>,
         url_origin: UrlOrigin,
         default_requests_per_sec: f64,
-        user_agent: &str,
-    ) -> Origin {
+    ) -> Origin
+    where
+        WF: WorkerBackendFactory,
+    {
         let base_url = url_origin.ascii_serialization().parse::<Url>().ok();
         let exclusion = if let Some(base_url) = base_url {
-            get_robots(base_url, user_agent)
+            get_robots(worker, base_url)
                 .await
                 .ok()
                 .flatten()
@@ -67,24 +72,25 @@ impl Origin {
 
 pub struct Origins {
     default_requests_per_sec: f64,
-    user_agent: String,
     origins: Vec<RwLock<HashMap<UrlOrigin, Arc<Origin>>>>,
 }
 
 const SEGMENT_SIZE: usize = 32;
 
 impl Origins {
-    pub fn new(default_requests_per_sec: f64, user_agent: String) -> Origins {
+    pub fn new(default_requests_per_sec: f64) -> Origins {
         Origins {
             default_requests_per_sec,
-            user_agent,
             origins: (0..SEGMENT_SIZE)
                 .map(|_| RwLock::new(HashMap::new()))
                 .collect::<Vec<_>>(),
         }
     }
 
-    pub async fn get_origin_for_url(&self, url: &Url) -> Arc<Origin> {
+    pub async fn get_origin_for_url<WF>(&self, worker: &CrawlWorker<WF>, url: &Url) -> Arc<Origin>
+    where
+        WF: WorkerBackendFactory,
+    {
         let url_origin = url.origin();
         let origins = &self.origins[crate::hash(&url_origin) as usize % SEGMENT_SIZE];
 
@@ -99,12 +105,8 @@ impl Origins {
 
             // Recheck condition:
             if !write_guard.contains_key(&url_origin) {
-                let origin = Origin::load(
-                    url_origin.clone(),
-                    self.default_requests_per_sec,
-                    &self.user_agent,
-                )
-                .await;
+                let origin =
+                    Origin::load(worker, url_origin.clone(), self.default_requests_per_sec).await;
 
                 write_guard.insert(url_origin.clone(), Arc::new(origin));
             }

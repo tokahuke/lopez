@@ -1,10 +1,11 @@
 //! Robot exclusion protocol (robots.txt) compliance.
 //! TODO. Maybe use Aho-Corasick here is a good idea but we need to play smart.
 
-use lazy_static::lazy_static;
-use reqwest::Client;
 use robots_txt::Robots;
 use url::{Position, Url};
+
+use crate::backend::WorkerBackendFactory;
+use crate::crawler::{CrawlWorker, Hit};
 
 pub struct RobotExclusion {
     disallow: Vec<Match>,
@@ -119,43 +120,49 @@ Sitemap: https://querobolsa.com.br/sitemap_index.xml
     println!("{:#?}", robots.choose_section("lopez"));
 }
 
-lazy_static! {
-    static ref CLIENT: Client = Client::builder()
-        .pool_max_idle_per_host(0)
-        .build()
-        .expect("can always build robots fetching reqwest::Client");
-}
-
 /// Tries to get robots.txt for *exactly* that `base_url`.
-async fn do_get_robots(base_url: &Url, user_agent: &str) -> Result<Option<String>, crate::Error> {
+async fn do_get_robots<WF>(
+    worker: &CrawlWorker<WF>,
+    base_url: &Url,
+) -> Result<Option<String>, crate::Error>
+where
+    WF: WorkerBackendFactory,
+{
     // Make the request.
-    let robots_url: Url = base_url.join("/robots.txt")?;
-    let response = CLIENT
-        .get(robots_url.clone())
-        .header("User-Agent", user_agent)
-        .send()
-        .await?;
-    let status_code = response.status();
+    let mut robots_url: Url = base_url.join("/robots.txt")?;
 
-    // Get status and filter failures:
-    if status_code.is_success() {
-        return Ok(Some(response.text().await?));
-    } else {
-        Ok(None)
+    // Now, try and follow redirects, but up to a point:
+    for _ in 0..5 {
+        match worker.download(&robots_url).await? {
+            Hit::Redirect { location, .. } => robots_url = location.parse::<Url>()?,
+            Hit::Download {
+                content,
+                status_code,
+            } if status_code.is_success() => {
+                return Ok(Some(String::from_utf8_lossy(&content).into_owned()))
+            }
+            Hit::Download { .. } => return Ok(None),
+        }
     }
+
+    // Patience is finite.
+    Ok(None)
 }
 
 /// Tries to get robots.txt for that `base_url`, going up a domain recursively if not found.
-pub async fn get_robots(
+pub async fn get_robots<WF>(
+    worker: &CrawlWorker<WF>,
     mut base_url: Url,
-    user_agent: &str,
-) -> Result<Option<String>, crate::Error> {
+) -> Result<Option<String>, crate::Error>
+where
+    WF: WorkerBackendFactory,
+{
     let mut robots = None;
 
     // If not successful, try one level up:
     while robots.is_none() {
         // If successful, return. You are done.
-        if let Some(resolved) = do_get_robots(&base_url, user_agent).await? {
+        if let Some(resolved) = do_get_robots(worker, &base_url).await? {
             robots = Some(resolved);
         } else if let Some(domain) = base_url.domain().map(str::to_owned) {
             // If not, move up!
@@ -176,11 +183,11 @@ pub async fn get_robots(
     Ok(robots)
 }
 
-#[tokio::test]
-async fn test_get_robots() {
-    let robots = get_robots("http://querobolsa.com.br".parse().unwrap(), "hello!")
-        .await
-        .unwrap()
-        .unwrap();
-    println!("{}", robots);
-}
+// #[tokio::test]
+// async fn test_get_robots() {
+//     let robots = get_robots("http://querobolsa.com.br".parse().unwrap(), "hello!")
+//         .await
+//         .unwrap()
+//         .unwrap();
+//     println!("{}", robots);
+// }
