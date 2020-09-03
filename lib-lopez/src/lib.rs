@@ -55,12 +55,27 @@ macro_rules! main {
         $crate::cli_impl!($backend_ty);
 
         #[tokio::main(basic_scheduler)]
-        async fn main() -> Result<(), $crate::Error> {
+        pub async fn main() -> Result<(), $crate::Error> {
+            use $crate::ansi_term::Color::{Green, Red};
+
+            match run().await {
+                Ok(Some(msg)) => println!("{}: {}", Green.bold().paint("ok"), msg),
+                Ok(None) => {}
+                Err(err) => println!("{}: {}", Red.bold().paint("error"), err),
+            }
+
+            Ok(())
+        }
+
+        async fn run() -> Result<Option<String>, $crate::Error> {
             use std::sync::Arc;
 
-            use $crate::ansi_term::Color::{Green, Red};
+            use $crate::ansi_term::Color::Red;
             use $crate::backend::Url;
             use $crate::Directives;
+
+            #[cfg(windows)]
+            let enabled = colored_json::enable_ansi_support();
 
             // Environment interpretation:
             let cli = Cli::from_args();
@@ -68,16 +83,13 @@ macro_rules! main {
             match cli.app {
                 LopezApp::Validate { source } => {
                     // Open directives:
-                    match Directives::load(source, cli.import_path) {
-                        Ok(_directives) => {
-                            println!("{}", Green.bold().paint("Valid configuration"))
-                        }
-                        Err(err) => println!("{}: {}", Red.bold().paint("Error"), err),
-                    }
+                    Directives::load(source, cli.import_path)
+                        .map(|_| Some("valid configuration".to_owned()))
+                        .map_err(|err| err.into())
                 }
                 LopezApp::Test { source, test_url } => {
                     match Url::parse(&test_url) {
-                        Err(err) => println!("{}: {}", Red.bold().paint("Invalid URL"), err,),
+                        Err(err) => Err(err.into()),
                         Ok(url) => {
                             // Open directives:
                             let directives = Arc::new(Directives::load(source, cli.import_path)?);
@@ -89,6 +101,8 @@ macro_rules! main {
 
                             // Show report (TODO bad representation! make something pretty):
                             report.pretty_print();
+
+                            Ok(None)
                         }
                     }
                 }
@@ -109,6 +123,8 @@ macro_rules! main {
 
                     // Do the thing!
                     $crate::start(Arc::new(profile), directives, backend).await?;
+
+                    Ok(Some("crawl complete".to_owned()))
                 }
                 LopezApp::PageRank { wave_name, config } => {
                     // Init logging:
@@ -119,16 +135,17 @@ macro_rules! main {
 
                     // Do the thing.
                     $crate::page_rank(backend).await?;
+
+                    Ok(Some("page rank done".to_owned()))
                 }
             }
-
-            Ok(())
         }
     };
 }
 
 /// A dummy module only to validate the expansion of the [`main!`] macro
 /// against the dummy backend.
+#[allow(unused)]
 mod dummy {
     main! { crate::backend::DummyBackend }
 }

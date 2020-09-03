@@ -19,7 +19,7 @@ pub enum Error {
     UnknownContentEncoding(String),
     #[fail(display = "timed out")]
     Timeout,
-    #[fail(display = "bad set-variable value for {}: {:?}", _0, _1)]
+    #[fail(display = "bad set-variable value for {}: {}", _0, _1)]
     BadSetVariableValue(crate::directives::Variable, serde_json::Value),
     #[fail(display = "type error: no type for `{}` of `{}`", _0, _1)]
     TypeError(String, crate::directives::Type),

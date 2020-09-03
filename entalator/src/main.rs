@@ -6,15 +6,18 @@ use std::{env, fs, io};
 const LOPEZ_BIN: &[u8] = include_bytes!("../../target/release/lopez");
 const LOPEZ_LIB: Dir = include_dir::include_dir!("../std-lopez");
 
+const LIB_PATH: &str = "/usr/share/lopez/lib";
+const BIN_PATH: &str = "/usr/local/bin/lopez";
+
 fn install() -> io::Result<()> {
-    let lib_path: PathBuf = "/usr/share/lopez/lib".parse().expect("infallible");
 
-    println!("Installing `lopez` to `/usr/local/bin`");
+    println!("Installing `lopez` to `{}`", BIN_PATH);
 
-    fs::write("/usr/local/bin/lopez", LOPEZ_BIN)?;
-    fs::set_permissions("/usr/local/bin/lopez", fs::Permissions::from_mode(0o711))?;
+    fs::write(BIN_PATH, LOPEZ_BIN)?;
+    fs::set_permissions(BIN_PATH, fs::Permissions::from_mode(0o711))?;
 
-    println!("Installing `std-lopez` to `usr/share/lopez`");
+    let lib_path: PathBuf = LIB_PATH.parse().expect("infallible");
+    println!("Installing `std-lopez` to `{}`", LIB_PATH);
 
     println!("Creating folder structure");
 

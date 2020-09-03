@@ -263,23 +263,31 @@ keywords : context {
 
 ruleset_namespace : context {
    : pattern {
-      regex \= (first|collect|count|sum)
+      regex \= (first|collect|distinct|count|sum|group)
       styles[] = .ruleset_aggregator;
    }
    : pattern {
-      regex \= (name|text|html|inner-html|attr)
+      regex \= (name|text|html|inner-html|attrs?|classes|id|parent|children|select-any|select-all)
       styles[] = .ruleset_extractor;
    }
    : pattern {
-      regex \= (is-null|is-not-null|length|hash|get|flatten|each|capture|all-captures)
+      regex \= (is-null|is-not-null|hash|not|as-number|greater-than|lesser-than|equals|length|is-empty|get|flatten|each|filter|pretty|capture|all-captures|matches|replace|with)
       styles[] = .ruleset_transformer;
+   }
+   : pattern {
+      regex \= (\!explode)
+      styles[] = .keyword;
    }
 }
 
 numeric : context {
    : pattern {
-      regex          \= (\b\d+)
+      regex          \= (\b[0-9_]+e?[+-]\d+)
       styles []       = .numeric;
+   }
+   : pattern {
+      regex          \= (true|false)
+      styles[]        = .keyword;
    }
 }
 

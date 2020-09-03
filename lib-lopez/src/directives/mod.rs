@@ -1,6 +1,7 @@
 mod aggregator;
 mod extractor;
 mod parse;
+mod parse_utils;
 mod transformer;
 mod value_ext;
 mod variable;
@@ -49,13 +50,18 @@ fn load_items_from<'a, P: AsRef<Path>>(
     module_name: &str,
     paths: &'a [P],
 ) -> Result<(&'a P, Vec<Item>), String> {
+    let formatted_module_name = if module_name.is_empty() {
+        "<main>"
+    } else {
+        module_name
+    };
+
     let (path, module_str) = read_from_many(paths)
-        .map_err(|err| format!("could not open module `{}`: {}", module_name, err))?;
+        .map_err(|err| format!("could not open module `{}`: {}", formatted_module_name, err))?;
 
     let module = parse::entrypoint(&module_str)
-        .map_err(|err| format!("failed to parse `{}`: {}", module_name, err))?
-        .1
-        .map_err(|err| format!("failed to interpret `{}`: {}", module_name, err))?;
+        .map_err(|err| format!("failed to parse `{}`: {}", formatted_module_name, err))?
+        .map_err(|err| format!("failed to interpret `{}`: {}", formatted_module_name, err))?;
 
     Ok((path, module))
 }
@@ -295,20 +301,20 @@ impl Directives {
         let duplicates = self.find_duplicate_rules();
         if !duplicates.is_empty() {
             issues.push(format!(
-                "There are duplicated rules in directives: \n\t- {}",
-                duplicates.into_iter().collect::<Vec<_>>().join("\n\t- ")
+                "There are duplicated rules in directives: \n    {}",
+                duplicates.into_iter().collect::<Vec<_>>().join("\n    ")
             ));
         }
 
         let invalid_seeds = self.find_invalid_seeds();
         if !invalid_seeds.is_empty() {
             issues.push(format!(
-                "There are seeds on the frontier or outside your boundaries: \n\t- {}",
+                "There are seeds on the frontier or outside your boundaries: \n    {}",
                 invalid_seeds
                     .into_iter()
                     .map(|url| url.as_str().to_owned())
                     .collect::<Vec<_>>()
-                    .join("\n\nt- ")
+                    .join("\n    ")
             ));
         }
 
@@ -316,8 +322,8 @@ impl Directives {
         if !invalid.is_empty() {
             issues.push(format!(
                 "There are invalid set-variable definitions \
-                (these name are not known): \n\t- {}",
-                invalid.into_iter().collect::<Vec<_>>().join("\n\t- "),
+                (these name are not known): \n    {}",
+                invalid.into_iter().collect::<Vec<_>>().join("\n    "),
             ));
         }
 
@@ -325,40 +331,43 @@ impl Directives {
         if !duplicates.is_empty() {
             issues.push(format!(
                 "There are duplicate set-variable definitions \
-                (these definitions are global): \n\t- {}",
-                duplicates.into_iter().collect::<Vec<_>>().join("\n\t- "),
+                (these definitions are global): \n    {}",
+                duplicates.into_iter().collect::<Vec<_>>().join("\n   "),
             ));
         }
 
         let bad_values = self.find_bad_set_variable_values();
         if !bad_values.is_empty() {
             issues.push(format!(
-                "There are bad values for set-variables: \n\t- {}",
+                "There are bad values for set-variables: \n    {}",
                 bad_values
                     .into_iter()
                     .map(|err| err.to_string())
                     .collect::<Vec<_>>()
-                    .join("\n\nt- "),
+                    .join("\n    "),
             ))
         }
 
         let type_errors = self.find_type_errors();
         if !type_errors.is_empty() {
             issues.push(format!(
-                "There are type errors for these rules: \n\t- {}",
+                "There are type errors for these rules: \n    {}",
                 type_errors
                     .into_iter()
                     .map(|(name, err)| format!("{}: {}", name, err))
                     .collect::<Vec<_>>()
-                    .join("\n\t- ")
+                    .join("\n    ")
             ))
         }
 
         if !issues.is_empty() {
-            return Err(issues.join("\n"));
+            Err(format!(
+                "There are issues with your configuration: \n{}",
+                issues.join("\n")
+            ))
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     /// Loads directives from a given file while also loading all dependencies.

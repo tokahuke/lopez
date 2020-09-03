@@ -14,6 +14,7 @@ use std::str::FromStr;
 use url::Url;
 
 use super::*;
+use super::parse_utils::ParseError;
 
 /// Defines end of file (lol!):
 fn eof(i: &str) -> IResult<&str, ()> {
@@ -839,6 +840,8 @@ fn boundary_test() {
 fn literal(i: &str) -> IResult<&str, Value> {
     alt((
         map(escaped_string, Value::String),
+        map(tag("true"), |_| true.into()),
+        map(tag("false"), |_| false.into()),
         map_res(tuple((digit1, not(tag(".")))), |(number, _): (&str, ())| {
             number.parse::<u64>().map(|num| num.into())
         }),
@@ -967,11 +970,11 @@ fn item_test() {
     //     ));
 }
 
-pub fn entrypoint(i: &str) -> IResult<&str, Result<Vec<Item>, String>> {
-    all_consuming(map(
+pub fn entrypoint(i: &str) -> Result<Result<Vec<Item>, String>, ParseError> {
+    ParseError::map_iresult(i, all_consuming(map(
         tuple((whitespace, many0(trailing_whitespace(item)))),
         |(_, results)| results.into_iter().collect::<Result<Vec<_>, _>>(),
-    ))(i)
+    ))(i))
 }
 
 #[test]
@@ -980,6 +983,5 @@ fn entrypoint_test() {
         "select * { } set foo = \"bar\"; allow \"foo\";\n"
     ))
     .unwrap()
-    .1
     .unwrap();
 }
