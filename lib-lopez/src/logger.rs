@@ -12,7 +12,8 @@ pub fn init_logger() -> log4rs::Handle {
 
     let config = Config::builder()
         .appender(Appender::builder().build("stderr", Box::new(console)))
-        .logger(Logger::builder().build("hyper_rustls", log::LevelFilter::Debug))
+        .logger(Logger::builder().build("rustls", log::LevelFilter::Off))
+        .logger(Logger::builder().build("html5ever", log::LevelFilter::Error))
         .build(
             Root::builder()
                 .appender("stderr")
