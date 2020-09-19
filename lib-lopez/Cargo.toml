@@ -1,6 +1,6 @@
 [package]
 name = "lib-lopez"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Pedro Arruda <pedrobittencourt3@protonmail.ch>"]
 edition = "2018"
 
@@ -10,7 +10,7 @@ edition = "2018"
 # Networking and Web stuff:
 # hyper-tls = "0.4.3"
 hyper-rustls = "0.21.0"
-hyper = "0.13.7"
+hyper = "0.13.8"
 # reqwest = { version = "0.10.8", features = ["rustls-tls"], default-features = false }
 scraper = "0.12.0"
 url = "2.1.1"
@@ -24,8 +24,8 @@ rayon = "1.4.0"
 tokio = { version = "0.2.22", features = ["macros", "rt-core", "rt-util"] }
 
 # Serialization:
-serde = "1.0.115"
-serde_derive = "1.0.115"
+serde = "1.0.116"
+serde_derive = "1.0.116"
 serde_json = "1.0.57"
 
 # Text stuff
@@ -39,10 +39,10 @@ log = "0.4.11"
 backtrace = "0.3.50"
 failure = "0.1.8"
 failure_derive = "0.1.8"
-async-trait = "0.1.38"
-structopt = "0.3.16"
+async-trait = "0.1.40"
+structopt = "0.3.17"
 ansi_term = "0.12"
 log4rs = "0.13.0"
-cached = { version = "0.18.0", default-features = false }
+cached = { version = "0.19.0", default-features = false }
 smallvec = "1.4.2"
 colored_json = "2.1.0"

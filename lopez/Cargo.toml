@@ -1,6 +1,6 @@
 [package]
 name = "lopez"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Pedro Bittencorut Arruda <pedrobittencourt3@protonmail.ch>"]
 edition = "2018"
 homepage = "https://silentpuma.com/lopez"
@@ -13,5 +13,5 @@ postgres-lopez = { path = "../postgres-lopez" }
 
 # Still nees these two for macro expansion (irrgh! will fin a way to get rid of these).
 tokio = { version = "0.2.22", features = ["macros", "rt-core", "rt-util"] }
-structopt = "0.3.16"
+structopt = "0.3.17"
 jemallocator = "0.3.2"

@@ -55,16 +55,20 @@ macro_rules! main {
         $crate::cli_impl!($backend_ty);
 
         #[tokio::main(basic_scheduler)]
-        pub async fn main() -> Result<(), $crate::Error> {
+        pub async fn main() {
             use $crate::ansi_term::Color::{Green, Red};
 
             match run().await {
-                Ok(Some(msg)) => println!("{}: {}", Green.bold().paint("ok"), msg),
-                Ok(None) => {}
-                Err(err) => println!("{}: {}", Red.bold().paint("error"), err),
+                Ok(Some(msg)) => {
+                    println!("{}: {}", Green.bold().paint("ok"), msg);
+                    std::process::exit(0)
+                },
+                Ok(None) => {std::process::exit(1)}
+                Err(err) => {
+                    println!("{}: {}", Red.bold().paint("error"), err);
+                    std::process::exit(1)
+                },
             }
-
-            Ok(())
         }
 
         async fn run() -> Result<Option<String>, $crate::Error> {

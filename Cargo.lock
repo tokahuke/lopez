@@ -149,9 +149,9 @@ checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
 
 [[package]]
 name = "cached"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6aaf9983f274431ca66cd5a3b19952c774384f28ff42442afeb034bfc99ac994"
+checksum = "c64ed980e5a154a1a34e4de3d81d20aa985f93b1bb6ab030f7afa0208b74396e"
 dependencies = [
  "once_cell",
 ]
@@ -389,7 +389,7 @@ checksum = "cd56b59865bce947ac5958779cfa508f6c3b9497cc762b7e24a12d11ccde2c4f"
 
 [[package]]
 name = "entalator"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "include_dir",
  "lopez",
@@ -727,6 +727,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd179ae861f0c2e53da70d892f5f3029f9594be0c41dc5269cd371691b1dc2f9"
 
 [[package]]
+name = "httpdate"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "494b4d60369511e7dea41cf646832512a94e542f68bb9c49e54518e0f468eb47"
+
+[[package]]
 name = "humantime"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -737,9 +743,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "0.13.7"
+version = "0.13.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e68a8dd9716185d9e64ea473ea6ef63529252e3e27623295a0378a19665d5eb"
+checksum = "2f3afcfae8af5ad0576a31e768415edb627824129e8e5a29b8bfccb2f234e835"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -749,10 +755,10 @@ dependencies = [
  "http",
  "http-body",
  "httparse",
+ "httpdate",
  "itoa",
  "pin-project",
  "socket2",
- "time",
  "tokio",
  "tower-service",
  "tracing",
@@ -904,7 +910,7 @@ dependencies = [
 
 [[package]]
 name = "lib-lopez"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "ansi_term 0.12.1",
  "async-trait",
@@ -1018,7 +1024,7 @@ dependencies = [
 
 [[package]]
 name = "lopez"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "jemallocator",
  "lib-lopez",
@@ -1085,9 +1091,9 @@ dependencies = [
 
 [[package]]
 name = "migrant_lib"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "585f085e4e1b1b7935f378ac36fb0968fda5cb4c2a8c69ffd147be3f2c720e38"
+checksum = "cdd763657dd793f0cfb3f5e5e1eb754bf56c38b5bc964696ebc4573cdfd0c240"
 dependencies = [
  "chrono",
  "error-chain",
@@ -1385,7 +1391,7 @@ dependencies = [
 
 [[package]]
 name = "postgres-lopez"
-version = "0.2.0"
+version = "0.5.0"
 dependencies = [
  "failure",
  "failure_derive",
@@ -1765,9 +1771,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.115"
+version = "1.0.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e54c9a88f2da7238af84b5101443f0c0d0a3bbdc455e34a5c9497b1903ed55d5"
+checksum = "96fe57af81d28386a513cbc6858332abc6117cfdb5999647c6444b8f43a370a5"
 
 [[package]]
 name = "serde-value"
@@ -1781,9 +1787,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.115"
+version = "1.0.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "609feed1d0a73cc36a0182a840a9b37b4a82f0b1150369f0536a9e3f2a31dc48"
+checksum = "f630a6370fd8e457873b4bd2ffdae75408bc291ba72be773772a4c2a065d9ae8"
 dependencies = [
  "proc-macro2",
  "quote",

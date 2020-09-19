@@ -1,10 +1,12 @@
 
 # Welcome to "the Lopez"
 <!-- Badges -->
-[![Apache 2 License](https://img.shields.io/badge/license-Apache%202.0-success)](license) [![](https://img.shields.io/discord/749985629588160623)](https://discord.gg/RuJYHv8) [![Github All Downloads](https://img.shields.io/github/downloads/tokahuke/lopez/total)](https://github.com/tokahuke/lopez/releases/latest/)
+[![Apache 2 License](https://img.shields.io/badge/license-Apache%202.0-blue)](license) [![Join our Discord chat](https://img.shields.io/discord/749985629588160623)](https://discord.gg/RuJYHv8) [![Github All Downloads](https://img.shields.io/github/downloads/tokahuke/lopez/total)](https://github.com/tokahuke/lopez/releases/latest/) [![GitHub release](https://img.shields.io/github/release/tokahuke/lopez.svg)](https://gitbub.com/tokahuke/lopez/releases/)
 <!-- End badges -->
 
+
 Crawling and scraping the Web for fun and profit.
+
 ## A word of caution
 
 There is a very tenuous line between a crawl and a DoS attack. Please, be mindful of the crawling speed you inflict on websites! For your convenience, crawling is limited by default to `2.5` hits per second per [origin](https://html.spec.whatwg.org/#origin), which is a good default. You can override this value using the `set max_hits_per_sec` directive in your configuration, but make sure that you will not overload the server (or that you have the permission to do so). Remember: some people's livelihoods depend on these websites and not every site has good DoS mitigation. 
