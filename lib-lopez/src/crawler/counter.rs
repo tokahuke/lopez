@@ -218,27 +218,27 @@ impl Display for Stats {
     }
 }
 
-struct Smoother {
-    last_state: f64,
-    last_variance: f64,
-    state_variance: f64,
-    output_variance: f64,
-}
+// struct Smoother {
+//     last_state: f64,
+//     last_variance: f64,
+//     state_variance: f64,
+//     output_variance: f64,
+// }
 
-fn par(a: f64, b: f64) -> f64 {
-    a * b / (a + b)
-}
+// fn par(a: f64, b: f64) -> f64 {
+//     a * b / (a + b)
+// }
 
-impl Smoother {
-    fn smooth(&mut self, input: f64) -> f64 {
-        let variance = self.last_variance + self.state_variance;
-        let new_state = self.last_state
-            + variance / (variance + self.output_variance) * (input - self.last_state);
-        let new_variance = par(variance, self.output_variance);
+// impl Smoother {
+//     fn smooth(&mut self, input: f64) -> f64 {
+//         let variance = self.last_variance + self.state_variance;
+//         let new_state = self.last_state
+//             + variance / (variance + self.output_variance) * (input - self.last_state);
+//         let new_variance = par(variance, self.output_variance);
 
-        self.last_state = new_state;
-        self.last_variance = new_variance;
+//         self.last_state = new_state;
+//         self.last_variance = new_variance;
 
-        new_state
-    }
-}
+//         new_state
+//     }
+// }
