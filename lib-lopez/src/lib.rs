@@ -86,12 +86,22 @@ macro_rules! main {
 
             match cli.app {
                 LopezApp::Validate { source } => {
+                    // Conditionally init logging:
+                    if cli.verbose {
+                        $crate::init_logger(cli.verbose);
+                    }
+                    
                     // Open directives:
                     Directives::load(source, cli.import_path)
                         .map(|_| Some("valid configuration".to_owned()))
                         .map_err(|err| err.into())
                 }
                 LopezApp::Test { source, test_url } => {
+                    // Conditionally init logging:
+                    if cli.verbose {
+                        $crate::init_logger(cli.verbose);
+                    }
+
                     match Url::parse(&test_url) {
                         Err(err) => Err(err.into()),
                         Ok(url) => {
@@ -117,7 +127,7 @@ macro_rules! main {
                     profile,
                 } => {
                     // Init logging:
-                    $crate::init_logger();
+                    $crate::init_logger(cli.verbose);
 
                     // Open directives:
                     let directives = Arc::new(Directives::load(source, cli.import_path)?);
@@ -132,7 +142,7 @@ macro_rules! main {
                 }
                 LopezApp::PageRank { wave_name, config } => {
                     // Init logging:
-                    $crate::init_logger();
+                    $crate::init_logger(cli.verbose);
 
                     // Create backend:
                     let backend = <$backend_ty>::init(config, &wave_name).await?;

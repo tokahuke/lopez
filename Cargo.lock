@@ -910,7 +910,7 @@ dependencies = [
 
 [[package]]
 name = "lib-lopez"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "ansi_term 0.12.1",
  "async-trait",
@@ -1024,7 +1024,7 @@ dependencies = [
 
 [[package]]
 name = "lopez"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "jemallocator",
  "lib-lopez",
@@ -1391,7 +1391,7 @@ dependencies = [
 
 [[package]]
 name = "postgres-lopez"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "failure",
  "failure_derive",
