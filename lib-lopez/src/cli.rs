@@ -9,7 +9,7 @@ macro_rules! cli_impl {
 
         #[derive(StructOpt)]
         pub struct Cli {
-            #[structopt(long, env)]
+            #[structopt(short = "v", long)]
             pub verbose: bool,
             #[structopt(long, env, default_value = "/usr/share/lopez/lib")]
             pub import_path: PathBuf,
