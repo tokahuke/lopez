@@ -57,6 +57,17 @@ macro_rules! cli_impl {
                 #[structopt(flatten)]
                 config: <$backend_ty as Backend>::Config,
             },
+            /// Removes an existing wave from the backend.
+            Rm {
+                /// Indicates whether to ignore if the corresponding wave does not exist.
+                #[structopt(short = "i", long)]
+                ignore: bool,
+                /// The name of the run to be removed.
+                #[structopt(env)]
+                wave_name: String,
+                #[structopt(flatten)]
+                config: <$backend_ty as Backend>::Config,
+            },
         }
     };
 }

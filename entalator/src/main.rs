@@ -10,7 +10,6 @@ const LIB_PATH: &str = "/usr/share/lopez/lib";
 const BIN_PATH: &str = "/usr/local/bin/lopez";
 
 fn install() -> io::Result<()> {
-
     println!("Installing `lopez` to `{}`", BIN_PATH);
 
     fs::write(BIN_PATH, LOPEZ_BIN)?;
