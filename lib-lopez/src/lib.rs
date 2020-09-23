@@ -62,12 +62,12 @@ macro_rules! main {
                 Ok(Some(msg)) => {
                     println!("{}: {}", Green.bold().paint("ok"), msg);
                     std::process::exit(0)
-                },
-                Ok(None) => {std::process::exit(1)}
+                }
+                Ok(None) => std::process::exit(1),
                 Err(err) => {
                     println!("{}: {}", Red.bold().paint("error"), err);
                     std::process::exit(1)
-                },
+                }
             }
         }
 
@@ -90,7 +90,7 @@ macro_rules! main {
                     if cli.verbose {
                         $crate::init_logger(cli.verbose);
                     }
-                    
+
                     // Open directives:
                     Directives::load(source, cli.import_path)
                         .map(|_| Some("valid configuration".to_owned()))
@@ -139,6 +139,30 @@ macro_rules! main {
                     $crate::start(Arc::new(profile), directives, backend).await?;
 
                     Ok(Some("crawl complete".to_owned()))
+                }
+                LopezApp::Rm {
+                    ignore,
+                    wave_name,
+                    config,
+                } => {
+                    if cli.verbose {
+                        $crate::init_logger(cli.verbose);
+                    }
+
+                    let mut backend = <$backend_ty>::init(config, &wave_name).await?;
+
+                    let was_removed = backend.remove().await?;
+
+                    if was_removed {
+                        Ok(Some(format!("wave `{}` removed", wave_name)))
+                    } else if ignore {
+                        Ok(Some(format!("wave `{}` not removed (ignoring)", wave_name)))
+                    } else {
+                        Err(
+                            format!("wave `{}` cannot be removed (does it exist?)", wave_name)
+                                .into(),
+                        )
+                    }
                 }
                 LopezApp::PageRank { wave_name, config } => {
                     // Init logging:

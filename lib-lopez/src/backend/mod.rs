@@ -23,6 +23,11 @@ pub trait Backend: Sized {
     async fn build_master(&mut self) -> Result<Self::Master, Self::Error>;
     fn build_worker_factory(&mut self, wave_id: i32) -> Self::WorkerFactory;
     async fn build_ranker(&mut self, wave_id: i32) -> Result<Self::Ranker, Self::Error>;
+
+    /// This may become a mandatory method in future releases.
+    async fn remove(&mut self) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
 }
 
 #[async_trait(?Send)]

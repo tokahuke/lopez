@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use url::Url;
 
-use super::*;
 use super::parse_utils::ParseError;
+use super::*;
 
 /// Defines end of file (lol!):
 fn eof(i: &str) -> IResult<&str, ()> {
@@ -971,10 +971,13 @@ fn item_test() {
 }
 
 pub fn entrypoint(i: &str) -> Result<Result<Vec<Item>, String>, ParseError> {
-    ParseError::map_iresult(i, all_consuming(map(
-        tuple((whitespace, many0(trailing_whitespace(item)))),
-        |(_, results)| results.into_iter().collect::<Result<Vec<_>, _>>(),
-    ))(i))
+    ParseError::map_iresult(
+        i,
+        all_consuming(map(
+            tuple((whitespace, many0(trailing_whitespace(item)))),
+            |(_, results)| results.into_iter().collect::<Result<Vec<_>, _>>(),
+        ))(i),
+    )
 }
 
 #[test]

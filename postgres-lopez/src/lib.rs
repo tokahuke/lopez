@@ -16,6 +16,8 @@ use self::master::PostgresMasterBackend;
 use self::ranker::PostgresPageRanker;
 use self::worker::PostgresWorkerBackend;
 
+const REMOVE_WAVE: &str = include_str!("sql/remove_wave.sql");
+
 pub struct PostgresBackend {
     config: Arc<DbConfig>,
     wave: String,
@@ -34,7 +36,7 @@ impl Backend for PostgresBackend {
         let config = Arc::new(config);
 
         // Make sure db exists and is up to date:
-        // This thing blocks, but no problemo; it is not critical:
+        // This thing blocks, but no problemo: it is not critical.
         config.ensure_create_db().await?;
         config.clone().sync_migrations().await?;
 
@@ -57,6 +59,16 @@ impl Backend for PostgresBackend {
 
     async fn build_ranker(&mut self, wave_id: i32) -> Result<Self::Ranker, crate::Error> {
         Ok(PostgresPageRanker::init(self.config.connect().await?, wave_id).await?)
+    }
+
+    async fn remove(&mut self) -> Result<bool, crate::Error> {
+        Ok(self
+            .config
+            .connect()
+            .await?
+            .query_opt(REMOVE_WAVE, &[&self.wave])
+            .await?
+            .is_some())
     }
 }
 

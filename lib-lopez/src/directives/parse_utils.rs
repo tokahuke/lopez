@@ -42,7 +42,11 @@ pub struct ParseError {
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "at {} ({:?}): {}", self.position, self.hint, self.message)
+        write!(
+            f,
+            "at {} ({:?}): {}",
+            self.position, self.hint, self.message
+        )
     }
 }
 
@@ -52,7 +56,15 @@ impl ParseError {
             nom::Err::Error((fragment, error_kind)) | nom::Err::Failure((fragment, error_kind)) => {
                 ParseError {
                     position: Position::of(text, fragment),
-                    hint: fragment.lines().map(str::to_owned).next().unwrap_or_default().chars().take(10).collect::<String>() + "...",
+                    hint: fragment
+                        .lines()
+                        .map(str::to_owned)
+                        .next()
+                        .unwrap_or_default()
+                        .chars()
+                        .take(10)
+                        .collect::<String>()
+                        + "...",
                     message: error_kind.description().to_owned(),
                 }
             }
