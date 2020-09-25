@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use structopt::StructOpt;
 use tokio_postgres::error::SqlState;
-use tokio_postgres::{connect as pg_connect, Client, NoTls};
+use tokio_postgres::{connect as pg_connect, Client, NoTls, Config as PgConfig};
 
 #[macro_export]
 macro_rules! params {
@@ -33,12 +33,17 @@ pub struct DbConfig {
 
 impl DbConfig {
     pub async fn connect(&self) -> Result<Rc<Client>, crate::Error> {
+        // Since we are not dealing with a fixed connection string, this way 
+        // is far more bug-proof:
+        let mut pg_config = PgConfig::new();
+        pg_config.host(&self.host);
+        pg_config.port(self.port);
+        pg_config.user(self.user);
+        pg_config.dbname(&self.dbname);
+        pg_config.password(&self.password);
+
         // Connect to database:
-        let (client, connection) = pg_connect(
-            &format!(
-                "host={} port={} user={} dbname={} password={}",
-                self.host, self.port, self.user, self.dbname, self.password,
-            ),
+        let (client, connection) = pg_config.connect(
             NoTls,
         )
         .await?;
