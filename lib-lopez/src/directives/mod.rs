@@ -9,7 +9,7 @@ mod variable;
 // Somewhere Else©; if it does not have an impl-block, it stays in `parse`.
 
 pub use expressions::{
-    Aggregator, AggregatorExpression, ComparableRegex, ExplodingExtractorExpression,
+    Aggregator, AggregatorExpression, ComparableRegex, Error, ExplodingExtractorExpression,
     ExtractorExpression, Transformer, TransformerExpression, Type,
 };
 pub use extractor::Extractor;
@@ -155,7 +155,7 @@ impl Module {
     }
 
     /// Finds type errors:
-    fn find_type_errors(&self, prefix: String, type_errors: &mut BTreeMap<String, crate::Error>) {
+    fn find_type_errors(&self, prefix: String, type_errors: &mut BTreeMap<String, Error>) {
         for item in &self.items {
             if let Item::RuleSet(rule_set) = item {
                 for (rule_name, rule) in &rule_set.aggregators {
@@ -264,7 +264,7 @@ impl Directives {
 
     /// Validates set-variables types. After this, you can always unwrap errors
     /// on `SetVariable`.
-    fn find_bad_set_variable_values(&self) -> Vec<crate::Error> {
+    fn find_bad_set_variable_values(&self) -> Vec<Error> {
         let variables = self.set_variables();
         let tests = vec![
             variables.get_as_str(Variable::UserAgent).err(),
@@ -285,7 +285,7 @@ impl Directives {
     }
 
     /// Finds type errors:
-    fn find_type_errors(&self) -> BTreeMap<String, crate::Error> {
+    fn find_type_errors(&self) -> BTreeMap<String, Error> {
         let mut errors = BTreeMap::new();
 
         for (name, module) in &self.modules {

@@ -3,6 +3,7 @@ use serde_json::{Map, Value};
 use std::fmt;
 
 use super::value_ext::force_f64;
+use super::{Error, Type};
 
 /// Puts captures into a nice JSON.
 fn capture_json(regex: &Regex, captures: Captures) -> Map<String, Value> {
@@ -88,29 +89,6 @@ impl PartialEq for ComparableRegex {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Type {
-    Any,
-    Bool,
-    Number,
-    String,
-    Array(Box<Type>),
-    Map(Box<Type>),
-}
-
-impl fmt::Display for Type {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Type::Any => write!(f, "any"),
-            Type::Bool => write!(f, "bool"),
-            Type::Number => write!(f, "number"),
-            Type::String => write!(f, "string"),
-            Type::Array(typ) => write!(f, "array[{}]", typ),
-            Type::Map(typ) => write!(f, "map[string, {}]", typ),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub enum Transformer {
     // General purpose:
@@ -180,11 +158,11 @@ impl fmt::Display for Transformer {
 }
 
 impl Transformer {
-    fn type_error<T>(&self, input: &Type) -> Result<T, crate::Error> {
-        Err(crate::Error::TypeError(self.to_string(), input.clone()))
+    fn type_error<T>(&self, input: &Type) -> Result<T, Error> {
+        Err(Error::TypeError(self.to_string(), input.clone()))
     }
 
-    pub fn type_for(&self, input: &Type) -> Result<Type, crate::Error> {
+    pub fn type_for(&self, input: &Type) -> Result<Type, Error> {
         match (self, input) {
             (Transformer::IsNull, _) => Ok(Type::Bool),
             (Transformer::IsNotNull, _) => Ok(Type::Bool),
@@ -368,7 +346,7 @@ impl TransformerExpression {
         self.transformers.is_empty()
     }
 
-    pub fn type_for(&self, input: &Type) -> Result<Type, crate::Error> {
+    pub fn type_for(&self, input: &Type) -> Result<Type, Error> {
         let mut typ = input.clone();
 
         for transformer in &*self.transformers {

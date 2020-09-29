@@ -6,8 +6,8 @@ use std::fmt;
 use super::value_ext::{force_f64, HashableJson};
 
 use super::extractor::ExplodingExtractorExpression;
-use super::transformer::{TransformerExpression, Type};
-use super::{Extractable, Typed};
+use super::transformer::TransformerExpression;
+use super::{Error, Extractable, Type, Typed};
 
 #[derive(Debug, PartialEq)]
 pub enum Aggregator<E: Typed> {
@@ -40,11 +40,11 @@ impl<E: Typed> fmt::Display for Aggregator<E> {
 }
 
 impl<E: Typed> Aggregator<E> {
-    fn type_error<U>(&self, input: &Type) -> Result<U, crate::Error> {
-        Err(crate::Error::TypeError(self.to_string(), input.clone()))
+    fn type_error<U>(&self, input: &Type) -> Result<U, Error> {
+        Err(Error::TypeError(self.to_string(), input.clone()))
     }
 
-    pub fn type_of(&self) -> Result<Type, crate::Error> {
+    pub fn type_of(&self) -> Result<Type, Error> {
         match self {
             Aggregator::Count => Ok(Type::Number),
             Aggregator::CountNotNull(extractor_expr) => {
@@ -102,7 +102,7 @@ impl<E: Typed> fmt::Display for AggregatorExpression<E> {
 }
 
 impl<E: Typed> AggregatorExpression<E> {
-    pub fn type_of(&self) -> Result<Type, crate::Error> {
+    pub fn type_of(&self) -> Result<Type, Error> {
         self.transformer_expression
             .type_for(&self.aggregator.type_of()?)
     }

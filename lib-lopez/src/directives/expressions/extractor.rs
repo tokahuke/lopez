@@ -2,8 +2,8 @@ use serde_json::Value;
 use smallvec::SmallVec;
 use std::fmt;
 
-use super::transformer::{TransformerExpression, Type};
-use super::{Extractable, Typed};
+use super::transformer::TransformerExpression;
+use super::{Error, Extractable, Type, Typed};
 
 #[derive(Debug, PartialEq)]
 pub struct ExtractorExpression<E: Typed> {
@@ -23,7 +23,7 @@ impl<E: Typed> fmt::Display for ExtractorExpression<E> {
 }
 
 impl<E: Typed> Typed for ExtractorExpression<E> {
-    fn type_of(&self) -> Result<Type, crate::Error> {
+    fn type_of(&self) -> Result<Type, Error> {
         self.transformer_expression
             .type_for(&self.extractor.type_of()?)
     }
@@ -59,14 +59,14 @@ impl<E: Typed> fmt::Display for ExplodingExtractorExpression<E> {
 }
 
 impl<E: Typed> Typed for ExplodingExtractorExpression<E> {
-    fn type_of(&self) -> Result<Type, crate::Error> {
+    fn type_of(&self) -> Result<Type, Error> {
         let raw = self.extractor_expression.type_of()?;
 
         if self.explodes {
             if let Type::Array(inner) = raw {
                 Ok(Type::clone(&inner))
             } else {
-                Err(crate::Error::TypeError("!explode".to_owned(), raw))
+                Err(Error::TypeError("!explode".to_owned(), raw))
             }
         } else {
             Ok(raw)
