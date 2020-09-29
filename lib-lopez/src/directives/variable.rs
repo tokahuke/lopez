@@ -1,8 +1,14 @@
-use serde_json::Value;
+use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::fmt;
 
-use super::value_ext::force_f64;
+/// The funny way I have to get a f64 from a `Number`. This is a lossy conversion.
+pub fn force_f64(num: &Number) -> f64 {
+    num.as_f64()
+        .or_else(|| num.as_i64().map(|num| num as f64))
+        .or_else(|| num.as_u64().map(|num| num as f64))
+        .expect("all cases covered")
+}
 
 // TODO: we can refactor this code. Instead of big useless matches, we can
 // create a relation of default values and default ways of retrieving Rust

@@ -1,5 +1,5 @@
-use scraper::ElementRef;
 use serde_json::{Map, Value};
+use smallvec::SmallVec;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 
@@ -7,19 +7,23 @@ use super::value_ext::{force_f64, HashableJson};
 
 use super::extractor::ExplodingExtractorExpression;
 use super::transformer::{TransformerExpression, Type};
+use super::{Extractable, Typed};
 
 #[derive(Debug, PartialEq)]
-pub enum Aggregator {
+pub enum Aggregator<E: Typed> {
     Count,
-    CountNotNull(ExplodingExtractorExpression),
-    First(ExplodingExtractorExpression),
-    Collect(ExplodingExtractorExpression),
-    Distinct(ExplodingExtractorExpression),
-    Sum(ExplodingExtractorExpression),
-    Group(ExplodingExtractorExpression, Box<AggregatorExpression>),
+    CountNotNull(ExplodingExtractorExpression<E>),
+    First(ExplodingExtractorExpression<E>),
+    Collect(ExplodingExtractorExpression<E>),
+    Distinct(ExplodingExtractorExpression<E>),
+    Sum(ExplodingExtractorExpression<E>),
+    Group(
+        ExplodingExtractorExpression<E>,
+        Box<AggregatorExpression<E>>,
+    ),
 }
 
-impl fmt::Display for Aggregator {
+impl<E: Typed> fmt::Display for Aggregator<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Aggregator::Count => write!(f, "count"),
@@ -35,8 +39,8 @@ impl fmt::Display for Aggregator {
     }
 }
 
-impl Aggregator {
-    fn type_error<T>(&self, input: &Type) -> Result<T, crate::Error> {
+impl<E: Typed> Aggregator<E> {
+    fn type_error<U>(&self, input: &Type) -> Result<U, crate::Error> {
         Err(crate::Error::TypeError(self.to_string(), input.clone()))
     }
 
@@ -81,12 +85,12 @@ impl Aggregator {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct AggregatorExpression {
-    pub aggregator: Aggregator,
+pub struct AggregatorExpression<E: Typed> {
+    pub aggregator: Aggregator<E>,
     pub transformer_expression: TransformerExpression,
 }
 
-impl fmt::Display for AggregatorExpression {
+impl<E: Typed> fmt::Display for AggregatorExpression<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.transformer_expression.is_empty() {
             write!(f, "{}", self.aggregator)
@@ -97,7 +101,7 @@ impl fmt::Display for AggregatorExpression {
     }
 }
 
-impl AggregatorExpression {
+impl<E: Typed> AggregatorExpression<E> {
     pub fn type_of(&self) -> Result<Type, crate::Error> {
         self.transformer_expression
             .type_for(&self.aggregator.type_of()?)
@@ -105,27 +109,27 @@ impl AggregatorExpression {
 }
 
 #[derive(Debug)]
-pub(crate) enum AggregatorState<'a> {
+pub(crate) enum AggregatorState<'a, E: Typed> {
     Count(usize),
-    CountNotNull(&'a ExplodingExtractorExpression, usize),
-    First(&'a ExplodingExtractorExpression, Option<Value>),
-    Collect(&'a ExplodingExtractorExpression, Vec<Value>),
-    Distinct(&'a ExplodingExtractorExpression, HashSet<HashableJson>),
-    Sum(&'a ExplodingExtractorExpression, f64),
+    CountNotNull(&'a ExplodingExtractorExpression<E>, usize),
+    First(&'a ExplodingExtractorExpression<E>, Option<Value>),
+    Collect(&'a ExplodingExtractorExpression<E>, Vec<Value>),
+    Distinct(&'a ExplodingExtractorExpression<E>, HashSet<HashableJson>),
+    Sum(&'a ExplodingExtractorExpression<E>, f64),
     Group(
-        &'a ExplodingExtractorExpression,
-        &'a AggregatorExpression,
-        BTreeMap<String, AggregatorExpressionState<'a>>,
+        &'a ExplodingExtractorExpression<E>,
+        &'a AggregatorExpression<E>,
+        BTreeMap<String, AggregatorExpressionState<'a, E>>,
     ),
 }
 
-impl<'a> AggregatorState<'a> {
+impl<'a, E: Typed> AggregatorState<'a, E> {
     #[track_caller]
     fn complain_about(&self, value: &Value) -> ! {
         panic!("type checked: {:#?} at {}", self, value)
     }
 
-    pub fn new(aggregator: &Aggregator) -> AggregatorState {
+    pub fn new(aggregator: &'a Aggregator<E>) -> Self {
         match aggregator {
             Aggregator::Count => AggregatorState::Count(0),
             Aggregator::CountNotNull(extractor_expr) => {
@@ -144,11 +148,14 @@ impl<'a> AggregatorState<'a> {
     }
 
     #[inline]
-    pub fn aggregate(&mut self, element_ref: ElementRef) {
+    pub fn aggregate<T>(&mut self, operand: T)
+    where
+        T: Extractable<ExplodingExtractorExpression<E>, Output = SmallVec<[Value; 1]>>,
+    {
         match self {
             AggregatorState::Count(count) => *count += 1,
             AggregatorState::CountNotNull(extractor, count) => {
-                for value in extractor.extract(element_ref) {
+                for value in operand.extract_with(&extractor) {
                     match value {
                         Value::Bool(true) => *count += 1,
                         Value::Bool(false) | Value::Null => {}
@@ -158,7 +165,7 @@ impl<'a> AggregatorState<'a> {
             }
             AggregatorState::First(extractor, maybe_value) => {
                 if maybe_value.is_none() {
-                    for value in extractor.extract(element_ref) {
+                    for value in operand.extract_with(&extractor) {
                         if !value.is_null() {
                             *maybe_value = Some(value);
                             break;
@@ -167,13 +174,18 @@ impl<'a> AggregatorState<'a> {
                 }
             }
             AggregatorState::Collect(extractor, values) => {
-                values.extend(extractor.extract(element_ref));
+                values.extend(operand.extract_with(&extractor));
             }
             AggregatorState::Distinct(extractor, values) => {
-                values.extend(extractor.extract(element_ref).into_iter().map(HashableJson));
+                values.extend(
+                    operand
+                        .extract_with(&extractor)
+                        .into_iter()
+                        .map(HashableJson),
+                );
             }
             AggregatorState::Sum(extractor, sum) => {
-                for value in extractor.extract(element_ref) {
+                for value in operand.extract_with(&extractor) {
                     if let Value::Number(num) = value {
                         *sum += force_f64(&num);
                     } else if !value.is_null() {
@@ -182,12 +194,12 @@ impl<'a> AggregatorState<'a> {
                 }
             }
             AggregatorState::Group(extractor_expr, aggregator_expr, groups) => {
-                for key in extractor_expr.extract(element_ref) {
+                for key in operand.extract_with(&extractor_expr) {
                     if let Value::String(key) = key {
                         groups
                             .entry(key)
-                            .or_insert_with(|| AggregatorExpressionState::new(aggregator_expr))
-                            .aggregate(element_ref)
+                            .or_insert_with(|| AggregatorExpressionState::<E>::new(aggregator_expr))
+                            .aggregate(operand)
                     } else if !key.is_null() {
                         self.complain_about(&key)
                     }
@@ -218,21 +230,24 @@ impl<'a> AggregatorState<'a> {
 }
 
 #[derive(Debug)]
-pub struct AggregatorExpressionState<'a> {
-    state: AggregatorState<'a>,
+pub struct AggregatorExpressionState<'a, E: Typed> {
+    state: AggregatorState<'a, E>,
     transformer_expression: &'a TransformerExpression,
 }
 
-impl<'a> AggregatorExpressionState<'a> {
-    pub fn new(aggregator_expr: &AggregatorExpression) -> AggregatorExpressionState {
+impl<'a, E: Typed> AggregatorExpressionState<'a, E> {
+    pub fn new(aggregator_expr: &'a AggregatorExpression<E>) -> AggregatorExpressionState<E> {
         AggregatorExpressionState {
             state: AggregatorState::new(&aggregator_expr.aggregator),
             transformer_expression: &aggregator_expr.transformer_expression,
         }
     }
 
-    pub fn aggregate(&mut self, element_ref: ElementRef) {
-        self.state.aggregate(element_ref)
+    pub fn aggregate<T>(&mut self, operand: T)
+    where
+        T: Extractable<ExplodingExtractorExpression<E>, Output = SmallVec<[Value; 1]>>,
+    {
+        self.state.aggregate(operand)
     }
 
     pub fn finalize(self) -> Value {

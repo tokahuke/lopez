@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, is_not, tag},
-    character::complete::{anychar, digit1, multispace1},
+    bytes::complete::{is_not, tag},
+    character::complete::digit1,
     combinator::{all_consuming, map, map_res, not, opt},
     multi::{many0, separated_list},
     number::complete::double,
@@ -10,134 +10,16 @@ use nom::{
 };
 use regex::Regex;
 use std::collections::HashMap;
-use std::str::FromStr;
 use url::Url;
 
+#[cfg(test)]
+use std::str::FromStr;
+
+use super::expressions::parse::*;
+use super::expressions::Parseable;
+use super::parse_common::*;
 use super::parse_utils::ParseError;
 use super::*;
-
-/// Defines end of file (lol!):
-fn eof(i: &str) -> IResult<&str, ()> {
-    if i.is_empty() {
-        Ok((i, ()))
-    } else {
-        Err(nom::Err::Error((i, nom::error::ErrorKind::IsA)))
-    }
-}
-
-/// Defines a comment line. This is the only kind of comment.
-fn comment(i: &str) -> IResult<&str, ()> {
-    map(
-        delimited(tag("//"), is_not("\n"), alt((map(tag("\n"), |_| ()), eof))),
-        |_| (),
-    )(i)
-}
-
-#[test]
-fn comment_test() {
-    assert_eq!(comment("// foo!\n").unwrap(), ("", ()));
-}
-
-/// Defines what is whitespace:
-fn whitespace(i: &str) -> IResult<&str, ()> {
-    map(many0(alt((comment, map(multispace1, |_| ())))), |_| ())(i)
-}
-
-#[test]
-fn whitespace_test() {
-    assert_eq!(
-        whitespace("//foo! \n\n\t  // bar! \n  \n\rnhé!").unwrap(),
-        ("nhé!", ())
-    );
-    assert_eq!(whitespace("").unwrap(), ("", ())); // is this behavior wise?
-}
-
-fn trailing_whitespace<'a, F, T>(f: F) -> impl Fn(&'a str) -> IResult<&'a str, T>
-where
-    F: Fn(&'a str) -> IResult<&'a str, T>,
-{
-    map(tuple((f, whitespace)), |(t, _)| t)
-}
-
-#[allow(clippy::needless_lifetimes)] // not that needless...
-fn tag_whitespace<'a>(tag_val: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, &'a str> {
-    trailing_whitespace(tag(tag_val))
-}
-
-fn tags_whitespace<'a>(tag_vals: &'a [&'a str]) -> impl Fn(&'a str) -> IResult<&'a str, ()> {
-    move |mut i: &str| {
-        for &tag_val in tag_vals {
-            let (matched, _) = tag_whitespace(tag_val)(i)?;
-            i = matched;
-        }
-
-        Ok((i, ()))
-    }
-}
-
-#[test]
-fn tag_whitespace_test() {
-    assert_eq!(tag_whitespace("foo")("foo  // bar\n"), Ok(("", "foo")));
-    assert_eq!(tag_whitespace("foo")("foo"), Ok(("", "foo")));
-}
-
-fn escaped_string(i: &str) -> IResult<&str, String> {
-    let (i, escaped) = delimited(
-        tag("\""),
-        escaped(is_not(r#"\""#), '\\', anychar),
-        tag("\""),
-    )(i)?;
-
-    let mut unescaped = String::with_capacity(escaped.len());
-    let mut is_escaped = false;
-
-    for ch in escaped.chars() {
-        match ch {
-            '"' if is_escaped => {
-                is_escaped = false;
-                unescaped.push('"')
-            }
-            ch if is_escaped => {
-                is_escaped = false;
-                unescaped.extend(&['\\', ch])
-            }
-            '\\' => {
-                is_escaped = true;
-            }
-            ch => {
-                is_escaped = false;
-                unescaped.push(ch)
-            }
-        }
-    }
-
-    Ok((i, unescaped))
-}
-
-#[test]
-fn escaped_string_test() {
-    assert_eq!(
-        escaped_string(
-            r#""foo\"
-bar"ho-ho"#
-        ),
-        Ok((
-            "ho-ho",
-            r#"foo"
-bar"#
-                .to_owned()
-        ))
-    );
-    assert_eq!(escaped_string("\"foo\""), Ok(("", "foo".to_owned())));
-    assert_eq!(
-        escaped_string("\"foo\\.bar\""),
-        Ok(("", "foo\\.bar".to_owned()))
-    );
-}
-
-fn regex(parsed: &str) -> Result<Regex, String> {
-    Regex::from_str(parsed).map_err(|err| format!("{}", err))
-}
 
 fn identifier(i: &str) -> IResult<&str, &str> {
     is_not("\\/:;.()[]{}\'\" \n\t\r\0")(i)
@@ -237,182 +119,81 @@ fn css_selector_test() {
     );
 }
 
-fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
-    alt((
-        map(tag("is-null"), |_| Ok(Transformer::IsNull)),
-        map(tag("is-not-null"), |_| Ok(Transformer::IsNotNull)),
-        map(tag("hash"), |_| Ok(Transformer::Hash)),
-        map(tag("not"), |_| Ok(Transformer::Not)),
-        map(tag("as-number"), |_| Ok(Transformer::AsNumber)),
-        map(
-            tuple((tag_whitespace("greater-than"), double)),
-            |(_, lhs)| Ok(Transformer::GreaterThan(lhs)),
-        ),
-        map(
-            tuple((tag_whitespace("lesser-than"), double)),
-            |(_, lhs)| Ok(Transformer::LesserThan(lhs)),
-        ),
-        map(tuple((tag_whitespace("equals"), double)), |(_, lhs)| {
-            Ok(Transformer::Equals(lhs))
-        }),
-        map(tag("length"), |_| Ok(Transformer::Length)),
-        map(tag("is-empty"), |_| Ok(Transformer::IsEmpty)),
-        map(tuple((tag_whitespace("get"), digit1)), |(_, digits)| {
-            Ok(Transformer::GetIdx(
-                digits.parse().map_err(|err| format!("{}", err))?,
-            ))
-        }),
-        map(
-            tuple((tag_whitespace("get"), escaped_string)),
-            |(_, string)| Ok(Transformer::Get(string.into_boxed_str())),
-        ),
-        map(tag("flatten"), |_| Ok(Transformer::Flatten)),
-        map(
-            tuple((
-                tag_whitespace("each"),
-                tag_whitespace("("),
-                transformer_expression,
-                tag(")"),
-            )),
-            |(_, _, transformer_expression, _)| Ok(Transformer::Each(transformer_expression?)),
-        ),
-        map(
-            tuple((
-                tag_whitespace("filter"),
-                tag_whitespace("("),
-                transformer_expression,
-                tag(")"),
-            )),
-            |(_, _, transformer_expression, _)| Ok(Transformer::Filter(transformer_expression?)),
-        ),
-        map(tag("pretty"), |_| Ok(Transformer::Pretty)),
-        map(
-            tuple((tag_whitespace("capture"), escaped_string)),
-            |(_, regexp)| Ok(Transformer::Capture(ComparableRegex(regex(&regexp)?))),
-        ),
-        map(
-            tuple((tag_whitespace("all-captures"), escaped_string)),
-            |(_, regexp)| Ok(Transformer::AllCaptures(ComparableRegex(regex(&regexp)?))),
-        ),
-        map(
-            tuple((tag_whitespace("matches"), escaped_string)),
-            |(_, regexp)| Ok(Transformer::Matches(ComparableRegex(regex(&regexp)?))),
-        ),
-        map(
-            tuple((
-                tag_whitespace("replace"),
-                trailing_whitespace(escaped_string),
-                tag_whitespace("with"),
-                escaped_string,
-            )),
-            |(_, regexp, _, replacer)| {
-                Ok(Transformer::Replace(
-                    ComparableRegex(regex(&regexp)?),
-                    replacer,
-                ))
-            },
-        ),
-    ))(i)
-}
-
-#[test]
-fn transformer_test() {
-    // No `PartialEq` for me.
-    match transformer("capture \n\t \"$(:!?foo)*\"")
-        .unwrap()
-        .1
-        .unwrap()
-    {
-        Transformer::Capture(ComparableRegex(regex)) => assert_eq!(
-            Regex::from_str("$(:!?foo)*").unwrap().as_str(),
-            regex.as_str()
-        ),
-        e => panic!("got {:?}", e),
+impl Parseable for Extractor {
+    fn parse(i: &str) -> IResult<&str, Result<Extractor, String>> {
+        alt((
+            map(tag("name"), |_| Ok(Extractor::Name)),
+            map(tag("text"), |_| Ok(Extractor::Text)),
+            map(tag("html"), |_| Ok(Extractor::Html)),
+            map(tag("inner-html"), |_| Ok(Extractor::InnerHtml)),
+            map(tag("attrs"), |_| Ok(Extractor::Attrs)),
+            map(tag("classes"), |_| Ok(Extractor::Classes)),
+            map(tag("id"), |_| Ok(Extractor::Id)),
+            map(
+                tuple((tag_whitespace("attr"), escaped_string)),
+                |(_, attr)| Ok(Extractor::Attr(attr.into_boxed_str())),
+            ),
+            map(
+                tuple((
+                    tag_whitespace("parent"),
+                    tag_whitespace("("),
+                    trailing_whitespace(extractor_expression::<Extractor>),
+                    tag(")"),
+                )),
+                |(_, _, extractor, _)| Ok(Extractor::Parent(Box::new(extractor?))),
+            ),
+            map(
+                tuple((
+                    tag_whitespace("children"),
+                    tag_whitespace("("),
+                    trailing_whitespace(extractor_expression::<Extractor>),
+                    tag(")"),
+                )),
+                |(_, _, extractor, _)| Ok(Extractor::Children(Box::new(extractor?))),
+            ),
+            map(
+                tuple((
+                    tag_whitespace("select-any"),
+                    tag_whitespace("("),
+                    trailing_whitespace(extractor_expression::<Extractor>),
+                    tag_whitespace(","),
+                    css_selector(')'),
+                    tag(")"),
+                )),
+                |(_, _, extractor, _, selector, _)| {
+                    Ok(Extractor::SelectAny(Box::new(extractor?), selector?))
+                },
+            ),
+            map(
+                tuple((
+                    tag_whitespace("select-all"),
+                    tag_whitespace("("),
+                    trailing_whitespace(extractor_expression::<Extractor>),
+                    tag_whitespace(","),
+                    css_selector(')'),
+                    tag(")"),
+                )),
+                |(_, _, extractor, _, selector, _)| {
+                    Ok(Extractor::SelectAll(Box::new(extractor?), selector?))
+                },
+            ),
+        ))(i)
     }
-}
-
-fn transformer_expression(i: &str) -> IResult<&str, Result<TransformerExpression, String>> {
-    map(many0(trailing_whitespace(transformer)), |transformers| {
-        Ok(TransformerExpression {
-            transformers: {
-                let mut transformers = transformers.into_iter().collect::<Result<Vec<_>, _>>()?;
-                transformers.shrink_to_fit();
-                transformers.into_boxed_slice()
-            },
-        })
-    })(i)
-}
-
-fn extractor(i: &str) -> IResult<&str, Result<Extractor, String>> {
-    alt((
-        map(tag("name"), |_| Ok(Extractor::Name)),
-        map(tag("text"), |_| Ok(Extractor::Text)),
-        map(tag("html"), |_| Ok(Extractor::Html)),
-        map(tag("inner-html"), |_| Ok(Extractor::InnerHtml)),
-        map(tag("attrs"), |_| Ok(Extractor::Attrs)),
-        map(tag("classes"), |_| Ok(Extractor::Classes)),
-        map(tag("id"), |_| Ok(Extractor::Id)),
-        map(
-            tuple((tag_whitespace("attr"), escaped_string)),
-            |(_, attr)| Ok(Extractor::Attr(attr.into_boxed_str())),
-        ),
-        map(
-            tuple((
-                tag_whitespace("parent"),
-                tag_whitespace("("),
-                trailing_whitespace(extractor_expression),
-                tag(")"),
-            )),
-            |(_, _, extractor, _)| Ok(Extractor::Parent(Box::new(extractor?))),
-        ),
-        map(
-            tuple((
-                tag_whitespace("children"),
-                tag_whitespace("("),
-                trailing_whitespace(extractor_expression),
-                tag(")"),
-            )),
-            |(_, _, extractor, _)| Ok(Extractor::Children(Box::new(extractor?))),
-        ),
-        map(
-            tuple((
-                tag_whitespace("select-any"),
-                tag_whitespace("("),
-                trailing_whitespace(extractor_expression),
-                tag_whitespace(","),
-                css_selector(')'),
-                tag(")"),
-            )),
-            |(_, _, extractor, _, selector, _)| {
-                Ok(Extractor::SelectAny(Box::new(extractor?), selector?))
-            },
-        ),
-        map(
-            tuple((
-                tag_whitespace("select-all"),
-                tag_whitespace("("),
-                trailing_whitespace(extractor_expression),
-                tag_whitespace(","),
-                css_selector(')'),
-                tag(")"),
-            )),
-            |(_, _, extractor, _, selector, _)| {
-                Ok(Extractor::SelectAll(Box::new(extractor?), selector?))
-            },
-        ),
-    ))(i)
 }
 
 #[test]
 fn extractor_test() {
-    assert_eq!(extractor("name"), Ok(("", Ok(Extractor::Name))));
+    assert_eq!(Extractor::parse("name"), Ok(("", Ok(Extractor::Name))));
     assert_eq!(
-        extractor("attr \"foo\""),
+        Extractor::parse("attr \"foo\""),
         Ok(("", Ok(Extractor::Attr("foo".to_owned().into_boxed_str()))))
     );
-    assert_eq!(extractor("inner-html"), Ok(("", Ok(Extractor::InnerHtml))));
     assert_eq!(
-        extractor("select-all(text pretty, li)"),
+        Extractor::parse("inner-html"),
+        Ok(("", Ok(Extractor::InnerHtml)))
+    );
+    assert_eq!(
+        Extractor::parse("select-all(text pretty, li)"),
         Ok((
             "",
             Ok(Extractor::SelectAll(
@@ -426,18 +207,6 @@ fn extractor_test() {
             ),)
         ))
     );
-}
-
-fn extractor_expression(i: &str) -> IResult<&str, Result<ExtractorExpression, String>> {
-    map(
-        tuple((trailing_whitespace(extractor), transformer_expression)),
-        |(extractor, transformer_expression)| {
-            Ok(ExtractorExpression {
-                extractor: extractor?,
-                transformer_expression: transformer_expression?,
-            })
-        },
-    )(i)
 }
 
 #[test]
@@ -456,23 +225,6 @@ fn extractor_expression_test() {
             })
         ))
     );
-}
-
-fn exploding_extractor_expression(
-    i: &str,
-) -> IResult<&str, Result<ExplodingExtractorExpression, String>> {
-    map(
-        tuple((
-            trailing_whitespace(extractor_expression),
-            opt(tag("!explode")),
-        )),
-        |(extractor_expression, explodes)| {
-            Ok(ExplodingExtractorExpression {
-                explodes: explodes.is_some(),
-                extractor_expression: extractor_expression?,
-            })
-        },
-    )(i)
 }
 
 #[test]
@@ -496,70 +248,6 @@ fn exploding_extractor_expression_test() {
     );
 }
 
-fn aggregator(i: &str) -> IResult<&str, Result<Aggregator, String>> {
-    alt((
-        map(
-            tuple((
-                tag_whitespace("count"),
-                tag_whitespace("("),
-                trailing_whitespace(exploding_extractor_expression),
-                tag(")"),
-            )),
-            |(_, _, extractor, _)| Ok(Aggregator::CountNotNull(extractor?)),
-        ),
-        map(tag("count"), |_| Ok(Aggregator::Count)),
-        map(
-            tuple((
-                tag_whitespace("first"),
-                tag_whitespace("("),
-                trailing_whitespace(exploding_extractor_expression),
-                tag(")"),
-            )),
-            |(_, _, extractor, _)| Ok(Aggregator::First(extractor?)),
-        ),
-        map(
-            tuple((
-                tag_whitespace("collect"),
-                tag_whitespace("("),
-                trailing_whitespace(exploding_extractor_expression),
-                tag(")"),
-            )),
-            |(_, _, extractor, _)| Ok(Aggregator::Collect(extractor?)),
-        ),
-        map(
-            tuple((
-                tag_whitespace("distinct"),
-                tag_whitespace("("),
-                trailing_whitespace(exploding_extractor_expression),
-                tag(")"),
-            )),
-            |(_, _, extractor, _)| Ok(Aggregator::Distinct(extractor?)),
-        ),
-        map(
-            tuple((
-                tag_whitespace("sum"),
-                tag_whitespace("("),
-                trailing_whitespace(exploding_extractor_expression),
-                tag(")"),
-            )),
-            |(_, _, extractor, _)| Ok(Aggregator::Sum(extractor?)),
-        ),
-        map(
-            tuple((
-                tag_whitespace("group"),
-                tag_whitespace("("),
-                trailing_whitespace(exploding_extractor_expression),
-                tag_whitespace(","),
-                trailing_whitespace(aggregator_expression),
-                tag(")"),
-            )),
-            |(_, _, extractor, _, aggregator, _)| {
-                Ok(Aggregator::Group(extractor?, Box::new(aggregator?)))
-            },
-        ),
-    ))(i)
-}
-
 #[test]
 fn aggregator_test() {
     // No `PartialEq` for me.
@@ -580,18 +268,6 @@ fn aggregator_test() {
             }))
         ))
     )
-}
-
-fn aggregator_expression(i: &str) -> IResult<&str, Result<AggregatorExpression, String>> {
-    map(
-        tuple((aggregator, whitespace, transformer_expression)),
-        |(aggregator, _, transformer_expression)| {
-            Ok(AggregatorExpression {
-                aggregator: aggregator?,
-                transformer_expression: transformer_expression?,
-            })
-        },
-    )(i)
 }
 
 #[test]
@@ -680,7 +356,7 @@ fn flag_directive_test() {
 pub struct RuleSet {
     pub in_page: Option<Regex>,
     pub selector: scraper::Selector,
-    pub aggregators: HashMap<String, AggregatorExpression>,
+    pub aggregators: HashMap<String, AggregatorExpression<Extractor>>,
 }
 
 fn rule_set(i: &str) -> IResult<&str, Result<RuleSet, String>> {
@@ -691,7 +367,7 @@ fn rule_set(i: &str) -> IResult<&str, Result<RuleSet, String>> {
                 opt(trailing_whitespace(in_directive)),
                 css_selector('{'),
             )),
-            identified_value(aggregator_expression),
+            identified_value(aggregator_expression::<Extractor>),
         ),
         |((_, in_page, selector), aggregator_list)| {
             let mut aggregators = HashMap::new();

@@ -1,9 +1,8 @@
 use scraper::ElementRef;
 use serde_json::{Map, Value};
-use smallvec::SmallVec;
 use std::fmt;
 
-use super::transformer::{TransformerExpression, Type};
+use super::expressions::{Extractable, ExtractorExpression, Type, Typed};
 
 #[derive(Debug, PartialEq)]
 pub enum Extractor {
@@ -15,10 +14,10 @@ pub enum Extractor {
     Attrs,
     Classes,
     Id,
-    Parent(Box<ExtractorExpression>),
-    Children(Box<ExtractorExpression>),
-    SelectAny(Box<ExtractorExpression>, scraper::Selector),
-    SelectAll(Box<ExtractorExpression>, scraper::Selector),
+    Parent(Box<ExtractorExpression<Self>>),
+    Children(Box<ExtractorExpression<Self>>),
+    SelectAny(Box<ExtractorExpression<Self>>, scraper::Selector),
+    SelectAll(Box<ExtractorExpression<Self>>, scraper::Selector),
 }
 
 impl fmt::Display for Extractor {
@@ -44,8 +43,8 @@ impl fmt::Display for Extractor {
     }
 }
 
-impl Extractor {
-    pub fn type_of(&self) -> Result<Type, crate::Error> {
+impl Typed for Extractor {
+    fn type_of(&self) -> Result<Type, crate::Error> {
         Ok(match self {
             Extractor::Name => Type::String,
             Extractor::Html => Type::String,
@@ -61,127 +60,52 @@ impl Extractor {
             Extractor::SelectAll(extractor, _) => Type::Array(Box::new(extractor.type_of()?)),
         })
     }
+}
+
+impl<'a> Extractable<Extractor> for ElementRef<'a> {
+    type Output = Value;
 
     #[inline(always)]
-    pub fn extract(&self, element_ref: ElementRef) -> Value {
-        match self {
-            Extractor::Name => element_ref.value().name().into(),
-            Extractor::Html => element_ref.html().into(),
-            Extractor::InnerHtml => element_ref.inner_html().into(),
-            Extractor::Text => element_ref.text().collect::<Vec<_>>().join(" ").into(),
-            Extractor::Attr(attr) => element_ref
+    fn extract_with(self, extractor: &Extractor) -> Value {
+        match extractor {
+            Extractor::Name => self.value().name().into(),
+            Extractor::Html => self.html().into(),
+            Extractor::InnerHtml => self.inner_html().into(),
+            Extractor::Text => self.text().collect::<Vec<_>>().join(" ").into(),
+            Extractor::Attr(attr) => self
                 .value()
                 .attr(attr)
                 .map(|value| value.into())
                 .unwrap_or(Value::Null),
-            Extractor::Attrs => element_ref
+            Extractor::Attrs => self
                 .value()
                 .attrs()
                 .map(|(key, value)| (key.to_owned(), value.to_owned().into()))
                 .collect::<Map<_, _>>()
                 .into(),
-            Extractor::Classes => element_ref.value().classes().collect::<Vec<_>>().into(),
-            Extractor::Id => element_ref
-                .value()
-                .id()
-                .map(|id| id.into())
-                .unwrap_or(Value::Null),
-            Extractor::Parent(parent) => element_ref
+            Extractor::Classes => self.value().classes().collect::<Vec<_>>().into(),
+            Extractor::Id => self.value().id().map(|id| id.into()).unwrap_or(Value::Null),
+            Extractor::Parent(parent) => self
                 .parent()
                 .and_then(ElementRef::wrap)
-                .map(|element_ref| parent.extract(element_ref))
+                .map(|element_ref| element_ref.extract_with(parent.as_ref()))
                 .unwrap_or(Value::Null),
-            Extractor::Children(children) => element_ref
+            Extractor::Children(children) => self
                 .children()
                 .filter_map(ElementRef::wrap)
-                .map(|element_ref| children.extract(element_ref))
+                .map(|element_ref| element_ref.extract_with(children.as_ref()))
                 .collect::<Vec<_>>()
                 .into(),
-            Extractor::SelectAny(extractor, selector) => element_ref
+            Extractor::SelectAny(extractor, selector) => self
                 .select(selector)
                 .next()
-                .map(|element_ref| extractor.extract(element_ref))
+                .map(|element_ref| element_ref.extract_with(extractor.as_ref()))
                 .unwrap_or(Value::Null),
-            Extractor::SelectAll(extractor, selector) => element_ref
+            Extractor::SelectAll(extractor, selector) => self
                 .select(selector)
-                .map(|element_ref| extractor.extract(element_ref))
+                .map(|element_ref| element_ref.extract_with(extractor.as_ref()))
                 .collect::<Vec<_>>()
                 .into(),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ExtractorExpression {
-    pub extractor: Extractor,
-    pub transformer_expression: TransformerExpression,
-}
-
-impl fmt::Display for ExtractorExpression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.transformer_expression.is_empty() {
-            write!(f, "{}", self.extractor)
-        } else {
-            write!(f, "{} ", self.extractor)?;
-            write!(f, "{}", self.transformer_expression)
-        }
-    }
-}
-
-impl ExtractorExpression {
-    pub fn type_of(&self) -> Result<Type, crate::Error> {
-        self.transformer_expression
-            .type_for(&self.extractor.type_of()?)
-    }
-
-    pub fn extract(&self, element_ref: ElementRef) -> Value {
-        self.transformer_expression
-            .eval(self.extractor.extract(element_ref))
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ExplodingExtractorExpression {
-    pub explodes: bool,
-    pub extractor_expression: ExtractorExpression,
-}
-
-impl fmt::Display for ExplodingExtractorExpression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.explodes {
-            write!(f, "{} !explode", self.extractor_expression)
-        } else {
-            write!(f, "{}", self.extractor_expression)
-        }
-    }
-}
-
-impl ExplodingExtractorExpression {
-    pub fn type_of(&self) -> Result<Type, crate::Error> {
-        let raw = self.extractor_expression.type_of()?;
-
-        if self.explodes {
-            if let Type::Array(inner) = raw {
-                Ok(Type::clone(&inner))
-            } else {
-                Err(crate::Error::TypeError("!explode".to_owned(), raw))
-            }
-        } else {
-            Ok(raw)
-        }
-    }
-
-    #[inline(always)]
-    pub fn extract(&self, element_ref: ElementRef) -> SmallVec<[Value; 1]> {
-        let extracted = self.extractor_expression.extract(element_ref);
-        if self.explodes {
-            if let Value::Array(array) = self.extractor_expression.extract(element_ref) {
-                SmallVec::from_vec(array)
-            } else {
-                todo!()
-            }
-        } else {
-            SmallVec::from_buf([extracted])
         }
     }
 }
