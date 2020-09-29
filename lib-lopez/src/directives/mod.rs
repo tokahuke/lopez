@@ -1,18 +1,19 @@
-mod aggregator;
+mod expressions;
 mod extractor;
 mod parse;
+mod parse_common;
 mod parse_utils;
-mod transformer;
-mod value_ext;
 mod variable;
 
 // Note on where to put parseable items: if it has an impl-block, it goes
 // Somewhere Else©; if it does not have an impl-block, it stays in `parse`.
 
-pub use aggregator::{Aggregator, AggregatorExpression};
-pub use extractor::{ExplodingExtractorExpression, Extractor, ExtractorExpression};
+pub use expressions::{
+    Aggregator, AggregatorExpression, ComparableRegex, ExplodingExtractorExpression,
+    ExtractorExpression, Transformer, TransformerExpression, Type,
+};
+pub use extractor::Extractor;
 pub use parse::{Boundary, Item, RuleSet};
-pub use transformer::{ComparableRegex, Transformer, TransformerExpression, Type};
 pub use variable::{SetVariables, Variable};
 
 use regex::RegexSet;
@@ -25,7 +26,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use url::Url;
 
-use self::aggregator::AggregatorExpressionState;
+use expressions::AggregatorExpressionState;
 
 const SEPARATOR: &str = ".";
 const EXTENSION: &str = "lcd";
