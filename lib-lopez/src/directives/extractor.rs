@@ -2,7 +2,7 @@ use scraper::ElementRef;
 use serde_json::{Map, Value};
 use std::fmt;
 
-use super::expressions::{Extractable, ExtractorExpression, Type, Typed};
+use super::expressions::{Error, Extractable, ExtractorExpression, Type, Typed};
 
 #[derive(Debug, PartialEq)]
 pub enum Extractor {
@@ -44,7 +44,7 @@ impl fmt::Display for Extractor {
 }
 
 impl Typed for Extractor {
-    fn type_of(&self) -> Result<Type, crate::Error> {
+    fn type_of(&self) -> Result<Type, Error> {
         Ok(match self {
             Extractor::Name => Type::String,
             Extractor::Html => Type::String,
