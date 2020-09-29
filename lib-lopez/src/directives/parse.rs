@@ -200,7 +200,7 @@ fn extractor_test() {
                 Box::new(ExtractorExpression {
                     extractor: Extractor::Text,
                     transformer_expression: TransformerExpression {
-                        transformers: vec![Transformer::Pretty],
+                        transformers: vec![Transformer::Pretty].into_boxed_slice(),
                     },
                 }),
                 scraper::Selector::parse("li").unwrap()
@@ -220,7 +220,7 @@ fn extractor_expression_test() {
                 transformer_expression: TransformerExpression {
                     transformers: vec![Transformer::Capture(ComparableRegex(
                         Regex::from_str("[0-9]+").unwrap()
-                    ))]
+                    ))].into_boxed_slice()
                 },
             })
         ))
@@ -240,7 +240,7 @@ fn exploding_extractor_expression_test() {
                     transformer_expression: TransformerExpression {
                         transformers: vec![Transformer::AllCaptures(ComparableRegex(
                             Regex::from_str("[0-9]+").unwrap()
-                        ))]
+                        ))].into_boxed_slice()
                     },
                 }
             })
@@ -262,7 +262,7 @@ fn aggregator_test() {
                     transformer_expression: TransformerExpression {
                         transformers: vec![Transformer::Capture(ComparableRegex(
                             Regex::from_str("$(:!?foo)*").unwrap()
-                        ))],
+                        ))].into_boxed_slice(),
                     },
                 },
             }))
@@ -284,12 +284,12 @@ fn aggregator_expression_test() {
                         transformer_expression: TransformerExpression {
                             transformers: vec![Transformer::Capture(ComparableRegex(
                                 Regex::from_str("$(:!?foo)*").unwrap()
-                            )),],
+                            )),].into_boxed_slice(),
                         },
                     },
                 }),
                 transformer_expression: TransformerExpression {
-                    transformers: vec![Transformer::Length,],
+                    transformers: vec![Transformer::Length,].into_boxed_slice(),
                 },
             })
         ))
