@@ -97,7 +97,7 @@ pub async fn start<B: Backend>(
 
     // Ensure that all analysis names exist:
     master_model
-        .create_analyses(&directives.rule_names())
+        .create_analyses(&directives.rules())
         .await
         .map_err(|err| err.into())?;
 

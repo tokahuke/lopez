@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use tokio_postgres::{Client, Statement};
 
-use lib_lopez::backend::{async_trait, MasterBackend, Url};
+use lib_lopez::backend::{async_trait, MasterBackend, Type, Url};
 use lib_lopez::hash;
 
 const ENSURE_WAVE: &str = include_str!("sql/ensure_wave.sql");
@@ -88,8 +88,15 @@ impl MasterBackend for PostgresMasterBackend {
         Ok(())
     }
 
-    async fn create_analyses(&mut self, analysis_names: &[String]) -> Result<(), crate::Error> {
-        let params = params![self.wave_id, analysis_names];
+    async fn create_analyses(
+        &mut self,
+        analysis_names: &[(String, Type)],
+    ) -> Result<(), crate::Error> {
+        let (analysis_names, result_types): (Vec<_>, Vec<_>) = analysis_names
+            .iter()
+            .map(|(name, typ)| (name.to_owned(), typ.to_string()))
+            .unzip();
+        let params = params![self.wave_id, analysis_names, result_types];
         self.client.execute(&self.create_analyses, params).await?;
 
         Ok(())

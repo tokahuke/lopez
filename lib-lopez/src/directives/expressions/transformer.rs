@@ -1,6 +1,7 @@
 use regex::{Captures, Regex};
+use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::fmt;
+use std::{cmp, fmt};
 
 use super::value_ext::force_f64;
 use super::{Error, Type};
@@ -80,8 +81,8 @@ fn pretty_test() {
 
 /// Need this to shoehorn regex equality. Note: this is utterly broken in a
 /// context wider than unittesting.
-#[derive(Debug)]
-pub struct ComparableRegex(pub Regex);
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ComparableRegex(#[serde(with = "serde_regex")] pub Regex);
 
 impl PartialEq for ComparableRegex {
     fn eq(&self, other: &ComparableRegex) -> bool {
@@ -89,7 +90,32 @@ impl PartialEq for ComparableRegex {
     }
 }
 
-#[derive(Debug, PartialEq)]
+fn cmp_json(this: &Value, other: &Value) -> cmp::Ordering {
+    match (this, other) {
+        (Value::Null, Value::Null) => cmp::Ordering::Equal,
+        (Value::Null, _) => cmp::Ordering::Less,
+        (_, Value::Null) => cmp::Ordering::Greater,
+        (Value::Bool(this), Value::Bool(other)) => this.cmp(&other),
+        (Value::Number(this), Value::Number(other)) => force_f64(this)
+            .partial_cmp(&force_f64(other))
+            .expect("json Number cannot be NaN"),
+        (Value::String(this), Value::String(other)) => this.cmp(&other),
+        (Value::Array(this), Value::Array(other)) => {
+            for (this, other) in this.iter().zip(other) {
+                match cmp_json(this, other) {
+                    cmp::Ordering::Equal => {}
+                    outcome => return outcome,
+                }
+            }
+
+            cmp::Ordering::Equal
+        }
+        (Value::Object(_), Value::Object(_)) => panic!("comparing objects is not defined (yet)"),
+        _ => panic!("comparing different types: {} and {}", this, other),
+    }
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum Transformer {
     // General purpose:
     IsNull,
@@ -111,15 +137,19 @@ pub enum Transformer {
     Flatten,
     Each(TransformerExpression),
     Filter(TransformerExpression),
+    Any(TransformerExpression), // missing docs!
+    All(TransformerExpression), // missing docs!
+    Sort,                       // missing docs!
 
     // String manipulation
     Pretty,
+    EqualsString(Box<str>), // missing docs!
 
     // Regex:
     Capture(ComparableRegex),
     AllCaptures(ComparableRegex),
     Matches(ComparableRegex),
-    Replace(ComparableRegex, String),
+    Replace(ComparableRegex, Box<str>),
 }
 
 impl fmt::Display for Transformer {
@@ -140,10 +170,14 @@ impl fmt::Display for Transformer {
             Transformer::Flatten => write!(f, "flatten"),
             Transformer::Each(transformer) => write!(f, "each({})", transformer),
             Transformer::Filter(transformer) => write!(f, "filter({})", transformer),
+            Transformer::Any(transformer) => write!(f, "any({})", transformer),
+            Transformer::All(transformer) => write!(f, "all({})", transformer),
+            Transformer::Sort => write!(f, "sort"),
             Transformer::Capture(ComparableRegex(regex)) => {
                 write!(f, "capture {:?}", regex.as_str())
             }
             Transformer::Pretty => write!(f, "pretty"),
+            Transformer::EqualsString(string) => write!(f, "equals {:?}", string),
             Transformer::AllCaptures(ComparableRegex(regex)) => {
                 write!(f, "all-captures {:?}", regex.as_str())
             }
@@ -194,20 +228,40 @@ impl Transformer {
                 Ok(Type::Map(Box::new(inner.type_for(typ)?)))
             }
             (Transformer::Filter(inner), Type::Array(typ)) => {
-                if let Ok(Type::Bool) = inner.type_for(typ) {
+                let inner_typ = inner.type_for(typ)?;
+                if let Type::Bool = &inner_typ {
                     Ok(Type::Array(typ.clone()))
                 } else {
-                    self.type_error(input)
+                    inner.expected(&Type::Bool, &inner_typ)
                 }
             }
             (Transformer::Filter(inner), Type::Map(typ)) => {
-                if let Ok(Type::Bool) = inner.type_for(typ) {
+                let inner_typ = inner.type_for(typ)?;
+                if let Type::Bool = &inner_typ {
                     Ok(Type::Map(typ.clone()))
                 } else {
-                    self.type_error(input)
+                    inner.expected(&Type::Bool, &inner_typ)
                 }
             }
+            (Transformer::Any(predicate), Type::Array(typ)) => {
+                let predicate_typ = predicate.type_for(typ)?;
+                if let Type::Bool = predicate_typ {
+                    Ok(Type::Bool)
+                } else {
+                    predicate.expected(&Type::Bool, &predicate_typ)
+                }
+            }
+            (Transformer::All(predicate), Type::Array(typ)) => {
+                let predicate_typ = predicate.type_for(typ)?;
+                if let Type::Bool = predicate_typ {
+                    Ok(Type::Bool)
+                } else {
+                    predicate.expected(&Type::Bool, &predicate_typ)
+                }
+            }
+            (Transformer::Sort, typ) if !typ.is_map() => Ok(typ.clone()),
             (Transformer::Pretty, Type::String) => Ok(Type::String),
+            (Transformer::EqualsString(_), Type::String) => Ok(Type::Bool),
             (Transformer::Capture(_), Type::String) => Ok(Type::Map(Box::new(Type::String))),
             (Transformer::AllCaptures(_), Type::String) => {
                 Ok(Type::Array(Box::new(Type::Map(Box::new(Type::String)))))
@@ -295,7 +349,31 @@ impl Transformer {
                 })
                 .collect::<Map<String, Value>>()
                 .into(),
+            (Transformer::Any(predicate), Value::Array(array)) => array
+                .into_iter()
+                .any(|value| match predicate.eval(value) {
+                    Value::Null | Value::Bool(false) => false,
+                    Value::Bool(true) => true,
+                    value => self.complain_about(&value),
+                })
+                .into(),
+            (Transformer::All(predicate), Value::Array(array)) => array
+                .into_iter()
+                .all(|value| match predicate.eval(value) {
+                    Value::Null | Value::Bool(false) => false,
+                    Value::Bool(true) => true,
+                    value => self.complain_about(&value),
+                })
+                .into(),
+            (Transformer::Sort, Value::Array(array)) => {
+                let mut array = array.clone();
+                array.sort_unstable_by(cmp_json);
+                array.into()
+            }
             (Transformer::Pretty, Value::String(string)) => pretty(&string).into(),
+            (Transformer::EqualsString(this), Value::String(other)) => {
+                (this.as_ref() == other.as_str()).into()
+            }
             (Transformer::Capture(ComparableRegex(regex)), Value::String(string)) => regex
                 .captures(&string)
                 .map(|captures| capture_json(&regex, captures).into())
@@ -310,7 +388,7 @@ impl Transformer {
             }
             (Transformer::Replace(ComparableRegex(regex), replacer), Value::String(string)) => {
                 regex
-                    .replace_all(&string, replacer.as_str())
+                    .replace_all(&string, replacer.as_ref())
                     .into_owned()
                     .into()
             }
@@ -320,7 +398,7 @@ impl Transformer {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct TransformerExpression {
     pub transformers: Box<[Transformer]>,
 }
@@ -344,6 +422,14 @@ impl fmt::Display for TransformerExpression {
 impl TransformerExpression {
     pub fn is_empty(&self) -> bool {
         self.transformers.is_empty()
+    }
+
+    fn expected<T>(&self, expected: &Type, got: &Type) -> Result<T, Error> {
+        Err(Error::ExpectedType {
+            thing: self.to_string(),
+            expected: expected.clone(),
+            got: got.clone(),
+        })
     }
 
     pub fn type_for(&self, input: &Type) -> Result<Type, Error> {

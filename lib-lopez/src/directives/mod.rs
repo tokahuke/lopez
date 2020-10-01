@@ -264,7 +264,7 @@ impl Directives {
 
     /// Validates set-variables types. After this, you can always unwrap errors
     /// on `SetVariable`.
-    fn find_bad_set_variable_values(&self) -> Vec<Error> {
+    fn find_bad_set_variable_values(&self) -> Vec<crate::Error> {
         let variables = self.set_variables();
         let tests = vec![
             variables.get_as_str(Variable::UserAgent).err(),
@@ -444,7 +444,7 @@ impl Directives {
     }
 
     // Gets the absolute names of all rules.
-    pub fn rule_names(&self) -> Vec<String> {
+    pub fn rules(&self) -> Vec<(String, Type)> {
         self.modules
             .iter()
             .flat_map(|(module_name, module)| {
@@ -457,10 +457,12 @@ impl Directives {
                 })
             })
             .flat_map(|(module_name, rule_set)| {
-                rule_set
-                    .aggregators
-                    .keys()
-                    .map(move |name| full_rule_name(module_name, name))
+                rule_set.aggregators.iter().map(move |(name, rule)| {
+                    (
+                        full_rule_name(module_name, name),
+                        rule.type_of().expect("already type-checked"),
+                    )
+                })
             })
             .collect()
     }

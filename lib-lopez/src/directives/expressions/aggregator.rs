@@ -1,3 +1,4 @@
+use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use smallvec::SmallVec;
 use std::collections::{BTreeMap, HashSet};
@@ -9,7 +10,7 @@ use super::extractor::ExplodingExtractorExpression;
 use super::transformer::TransformerExpression;
 use super::{Error, Extractable, Type, Typed};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum Aggregator<E: Typed> {
     Count,
     CountNotNull(ExplodingExtractorExpression<E>),
@@ -82,9 +83,35 @@ impl<E: Typed> Aggregator<E> {
             }
         }
     }
+
+    pub fn with_extractor_mut<F, T>(&mut self, mut f: F) -> SmallVec<[T; 1]>
+    where
+        F: FnMut(&mut E) -> T,
+    {
+        self.with_extractor_expr_mut(move |e| e.with_extractor_mut(&mut f))
+    }
+
+    pub fn with_extractor_expr_mut<F, T>(&mut self, mut f: F) -> SmallVec<[T; 1]>
+    where
+        F: FnMut(&mut ExplodingExtractorExpression<E>) -> T,
+    {
+        match self {
+            Aggregator::Count => SmallVec::default(),
+            Aggregator::CountNotNull(extractor_expr) => [f(extractor_expr)].into(),
+            Aggregator::First(extractor_expr) => [f(extractor_expr)].into(),
+            Aggregator::Collect(extractor_expr) => [f(extractor_expr)].into(),
+            Aggregator::Distinct(extractor_expr) => [f(extractor_expr)].into(),
+            Aggregator::Sum(extractor_expr) => [f(extractor_expr)].into(),
+            Aggregator::Group(extractor_expr, aggregator_expr) => {
+                let mut top: SmallVec<[T; 1]> = [f(extractor_expr)].into();
+                top.extend(aggregator_expr.as_mut().with_extractor_expr_mut(f));
+                top
+            }
+        }
+    }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct AggregatorExpression<E: Typed> {
     pub aggregator: Aggregator<E>,
     pub transformer_expression: TransformerExpression,
@@ -105,6 +132,20 @@ impl<E: Typed> AggregatorExpression<E> {
     pub fn type_of(&self) -> Result<Type, Error> {
         self.transformer_expression
             .type_for(&self.aggregator.type_of()?)
+    }
+
+    pub fn with_extractor_mut<F, T>(&mut self, f: F) -> SmallVec<[T; 1]>
+    where
+        F: FnMut(&mut E) -> T,
+    {
+        self.aggregator.with_extractor_mut(f)
+    }
+
+    pub fn with_extractor_expr_mut<F, T>(&mut self, f: F) -> SmallVec<[T; 1]>
+    where
+        F: FnMut(&mut ExplodingExtractorExpression<E>) -> T,
+    {
+        self.aggregator.with_extractor_expr_mut(f)
     }
 }
 

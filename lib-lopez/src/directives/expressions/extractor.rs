@@ -1,3 +1,4 @@
+use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use smallvec::SmallVec;
 use std::fmt;
@@ -5,7 +6,7 @@ use std::fmt;
 use super::transformer::TransformerExpression;
 use super::{Error, Extractable, Type, Typed};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct ExtractorExpression<E: Typed> {
     pub extractor: E,
     pub transformer_expression: TransformerExpression,
@@ -29,6 +30,15 @@ impl<E: Typed> Typed for ExtractorExpression<E> {
     }
 }
 
+impl<E: Typed> ExtractorExpression<E> {
+    pub fn with_extractor_mut<F, T>(&mut self, mut f: F) -> T
+    where
+        F: FnMut(&mut E) -> T,
+    {
+        f(&mut self.extractor)
+    }
+}
+
 impl<T, E: Typed> Extractable<ExtractorExpression<E>> for T
 where
     T: Extractable<E, Output = Value>,
@@ -42,10 +52,19 @@ where
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct ExplodingExtractorExpression<E: Typed> {
     pub explodes: bool,
     pub extractor_expression: ExtractorExpression<E>,
+}
+
+impl<E: Typed> ExplodingExtractorExpression<E> {
+    pub fn with_extractor_mut<F, T>(&mut self, f: F) -> T
+    where
+        F: FnMut(&mut E) -> T,
+    {
+        self.extractor_expression.with_extractor_mut(f)
+    }
 }
 
 impl<E: Typed> fmt::Display for ExplodingExtractorExpression<E> {
