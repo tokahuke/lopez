@@ -53,7 +53,10 @@ impl MasterBackend for DummyMasterBackend {
         panic!("cannot use DummyMasterBackend");
     }
 
-    async fn create_analyses(&mut self, _analysis_names: &[String]) -> Result<(), Self::Error> {
+    async fn create_analyses(
+        &mut self,
+        _analysis_names: &[(String, Type)],
+    ) -> Result<(), Self::Error> {
         panic!("cannot use DummyMasterBackend");
     }
 

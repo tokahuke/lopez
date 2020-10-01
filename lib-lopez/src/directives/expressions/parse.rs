@@ -13,81 +13,150 @@ use super::super::parse_common::*;
 use super::Parseable;
 use super::*;
 
-fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
+pub fn r#type(i: &str) -> IResult<&str, Type> {
     alt((
-        map(tag("is-null"), |_| Ok(Transformer::IsNull)),
-        map(tag("is-not-null"), |_| Ok(Transformer::IsNotNull)),
-        map(tag("hash"), |_| Ok(Transformer::Hash)),
-        map(tag("not"), |_| Ok(Transformer::Not)),
-        map(tag("as-number"), |_| Ok(Transformer::AsNumber)),
-        map(
-            tuple((tag_whitespace("greater-than"), double)),
-            |(_, lhs)| Ok(Transformer::GreaterThan(lhs)),
-        ),
-        map(
-            tuple((tag_whitespace("lesser-than"), double)),
-            |(_, lhs)| Ok(Transformer::LesserThan(lhs)),
-        ),
-        map(tuple((tag_whitespace("equals"), double)), |(_, lhs)| {
-            Ok(Transformer::Equals(lhs))
-        }),
-        map(tag("length"), |_| Ok(Transformer::Length)),
-        map(tag("is-empty"), |_| Ok(Transformer::IsEmpty)),
-        map(tuple((tag_whitespace("get"), digit1)), |(_, digits)| {
-            Ok(Transformer::GetIdx(
-                digits.parse().map_err(|err| format!("{}", err))?,
-            ))
-        }),
-        map(
-            tuple((tag_whitespace("get"), escaped_string)),
-            |(_, string)| Ok(Transformer::Get(string.into_boxed_str())),
-        ),
-        map(tag("flatten"), |_| Ok(Transformer::Flatten)),
+        map(tag("any"), |_| Type::Any),
+        map(tag("bool"), |_| Type::Bool),
+        map(tag("number"), |_| Type::Number),
+        map(tag("string"), |_| Type::String),
         map(
             tuple((
-                tag_whitespace("each"),
-                tag_whitespace("("),
-                transformer_expression,
-                tag(")"),
+                tag_whitespace("array"),
+                tag_whitespace("["),
+                trailing_whitespace(r#type),
+                tag("]"),
             )),
-            |(_, _, transformer_expression, _)| Ok(Transformer::Each(transformer_expression?)),
+            |(_, _, r#type, _)| Type::Array(Box::new(r#type)),
         ),
         map(
             tuple((
-                tag_whitespace("filter"),
-                tag_whitespace("("),
-                transformer_expression,
-                tag(")"),
+                tag_whitespace("map"),
+                tag_whitespace("["),
+                tag_whitespace("string"),
+                tag_whitespace(","),
+                trailing_whitespace(r#type),
+                tag_whitespace("]"),
             )),
-            |(_, _, transformer_expression, _)| Ok(Transformer::Filter(transformer_expression?)),
+            |(_, _, _, _, r#type, _)| Type::Map(Box::new(r#type)),
         ),
-        map(tag("pretty"), |_| Ok(Transformer::Pretty)),
-        map(
-            tuple((tag_whitespace("capture"), escaped_string)),
-            |(_, regexp)| Ok(Transformer::Capture(ComparableRegex(regex(&regexp)?))),
-        ),
-        map(
-            tuple((tag_whitespace("all-captures"), escaped_string)),
-            |(_, regexp)| Ok(Transformer::AllCaptures(ComparableRegex(regex(&regexp)?))),
-        ),
-        map(
-            tuple((tag_whitespace("matches"), escaped_string)),
-            |(_, regexp)| Ok(Transformer::Matches(ComparableRegex(regex(&regexp)?))),
-        ),
-        map(
-            tuple((
-                tag_whitespace("replace"),
-                trailing_whitespace(escaped_string),
-                tag_whitespace("with"),
-                escaped_string,
-            )),
-            |(_, regexp, _, replacer)| {
-                Ok(Transformer::Replace(
-                    ComparableRegex(regex(&regexp)?),
-                    replacer,
+    ))(i)
+}
+
+#[test]
+fn type_test() {
+    assert_eq!(
+        r#type("map[string,array[   bool ]]"),
+        Ok(("", Type::Map(Box::new(Type::Array(Box::new(Type::Bool))))))
+    );
+}
+
+fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
+    // Multiple alts because too many elements in tuple for poor nom...
+    alt((
+        alt((
+            map(tag("is-null"), |_| Ok(Transformer::IsNull)),
+            map(tag("is-not-null"), |_| Ok(Transformer::IsNotNull)),
+            map(tag("hash"), |_| Ok(Transformer::Hash)),
+            map(tag("not"), |_| Ok(Transformer::Not)),
+            map(tag("as-number"), |_| Ok(Transformer::AsNumber)),
+            map(
+                tuple((tag_whitespace("greater-than"), double)),
+                |(_, lhs)| Ok(Transformer::GreaterThan(lhs)),
+            ),
+            map(
+                tuple((tag_whitespace("lesser-than"), double)),
+                |(_, lhs)| Ok(Transformer::LesserThan(lhs)),
+            ),
+            map(tuple((tag_whitespace("equals"), double)), |(_, lhs)| {
+                Ok(Transformer::Equals(lhs))
+            }),
+        )),
+        alt((
+            map(tag("length"), |_| Ok(Transformer::Length)),
+            map(tag("is-empty"), |_| Ok(Transformer::IsEmpty)),
+            map(tuple((tag_whitespace("get"), digit1)), |(_, digits)| {
+                Ok(Transformer::GetIdx(
+                    digits.parse().map_err(|err| format!("{}", err))?,
                 ))
-            },
-        ),
+            }),
+            map(
+                tuple((tag_whitespace("get"), escaped_string)),
+                |(_, string)| Ok(Transformer::Get(string.into_boxed_str())),
+            ),
+            map(tag("flatten"), |_| Ok(Transformer::Flatten)),
+            map(
+                tuple((
+                    tag_whitespace("each"),
+                    tag_whitespace("("),
+                    transformer_expression,
+                    tag(")"),
+                )),
+                |(_, _, transformer_expression, _)| Ok(Transformer::Each(transformer_expression?)),
+            ),
+            map(
+                tuple((
+                    tag_whitespace("filter"),
+                    tag_whitespace("("),
+                    transformer_expression,
+                    tag(")"),
+                )),
+                |(_, _, transformer_expression, _)| {
+                    Ok(Transformer::Filter(transformer_expression?))
+                },
+            ),
+            map(
+                tuple((
+                    tag_whitespace("any"),
+                    tag_whitespace("("),
+                    transformer_expression,
+                    tag(")"),
+                )),
+                |(_, _, transformer_expression, _)| Ok(Transformer::Any(transformer_expression?)),
+            ),
+            map(
+                tuple((
+                    tag_whitespace("all"),
+                    tag_whitespace("("),
+                    transformer_expression,
+                    tag(")"),
+                )),
+                |(_, _, transformer_expression, _)| Ok(Transformer::All(transformer_expression?)),
+            ),
+            map(tag("sort"), |_| Ok(Transformer::Sort)),
+        )),
+        alt((
+            map(tag("pretty"), |_| Ok(Transformer::Pretty)),
+            map(
+                tuple((tag_whitespace("equals"), escaped_string)),
+                |(_, string)| Ok(Transformer::EqualsString(string.into_boxed_str())),
+            ),
+            map(
+                tuple((tag_whitespace("capture"), escaped_string)),
+                |(_, regexp)| Ok(Transformer::Capture(ComparableRegex(regex(&regexp)?))),
+            ),
+            map(
+                tuple((tag_whitespace("all-captures"), escaped_string)),
+                |(_, regexp)| Ok(Transformer::AllCaptures(ComparableRegex(regex(&regexp)?))),
+            ),
+            map(
+                tuple((tag_whitespace("matches"), escaped_string)),
+                |(_, regexp)| Ok(Transformer::Matches(ComparableRegex(regex(&regexp)?))),
+            ),
+            map(
+                tuple((
+                    tag_whitespace("replace"),
+                    trailing_whitespace(escaped_string),
+                    tag_whitespace("with"),
+                    escaped_string,
+                )),
+                |(_, regexp, _, replacer)| {
+                    Ok(Transformer::Replace(
+                        ComparableRegex(regex(&regexp)?),
+                        replacer.into_boxed_str(),
+                    ))
+                },
+            ),
+        )),
     ))(i)
 }
 

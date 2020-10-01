@@ -6,8 +6,10 @@ pub use serde_json::Value;
 pub use structopt::StructOpt;
 pub use url::Url;
 
-pub use self::dummy::DummyBackend;
 pub use crate::crawler::Reason;
+pub use crate::directives::Type;
+
+pub use self::dummy::DummyBackend;
 
 use crate::page_rank::power_iteration;
 
@@ -36,7 +38,7 @@ pub trait MasterBackend {
 
     fn wave_id(&mut self) -> i32;
     async fn ensure_seeded(&mut self, seeds: &[Url]) -> Result<(), Self::Error>;
-    async fn create_analyses(&mut self, analysis_names: &[String]) -> Result<(), Self::Error>;
+    async fn create_analyses(&mut self, analyses: &[(String, Type)]) -> Result<(), Self::Error>;
     async fn count_crawled(&mut self) -> Result<usize, Self::Error>;
     async fn reset_queue(&mut self) -> Result<(), Self::Error>;
     async fn fetch(
