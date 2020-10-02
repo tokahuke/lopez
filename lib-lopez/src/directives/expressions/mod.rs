@@ -78,6 +78,10 @@ pub enum Error {
         got: Type,
         expected: Type,
     },
+    NotExpectedType {
+        thing: String,
+        not_expected: Type,
+    },
 }
 
 impl fmt::Display for Error {
@@ -95,11 +99,15 @@ impl fmt::Display for Error {
                 "type error: expected {} for {} and got {}",
                 expected, thing, got
             ),
+            Error::NotExpectedType {
+                thing,
+                not_expected,
+            } => write!(f, "type error: not expected {} for {}", not_expected, thing,),
         }
     }
 }
 
-pub trait Parseable: Sized + Typed {
+pub trait Parseable: Sized {
     fn parse(i: &str) -> nom::IResult<&str, Result<Self, String>>;
 }
 
