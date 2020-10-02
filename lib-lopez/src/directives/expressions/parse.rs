@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::tag,
     character::complete::digit1,
     combinator::{map, opt},
-    multi::many0,
+    multi::{many0, separated_list},
     number::complete::double,
     sequence::tuple,
     IResult,
@@ -67,9 +67,35 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
                 tuple((tag_whitespace("lesser-than"), double)),
                 |(_, lhs)| Ok(Transformer::LesserThan(lhs)),
             ),
+            map(
+                tuple((tag_whitespace("greater-or-equal"), double)),
+                |(_, lhs)| Ok(Transformer::GreaterOrEqual(lhs)),
+            ),
+            map(
+                tuple((tag_whitespace("lesser-or-equal"), double)),
+                |(_, lhs)| Ok(Transformer::LesserOrEqual(lhs)),
+            ),
+            map(
+                tuple((
+                    tag_whitespace("between"),
+                    trailing_whitespace(double),
+                    tag_whitespace("and"),
+                    double,
+                )),
+                |(_, low, _, high)| Ok(Transformer::Between(low, high)),
+            ),
             map(tuple((tag_whitespace("equals"), double)), |(_, lhs)| {
                 Ok(Transformer::Equals(lhs))
             }),
+            map(
+                tuple((
+                    tag_whitespace("in"),
+                    tag_whitespace("["),
+                    separated_list(tag_whitespace(","), double),
+                    tag("]"),
+                )),
+                |(_, _, list, _)| Ok(Transformer::In(list.into_boxed_slice())),
+            ),
         )),
         alt((
             map(tag("length"), |_| Ok(Transformer::Length)),
@@ -125,10 +151,26 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
             map(tag("sort"), |_| Ok(Transformer::Sort)),
         )),
         alt((
+            map(tag("as-string"), |_| Ok(Transformer::AsString)),
             map(tag("pretty"), |_| Ok(Transformer::Pretty)),
             map(
                 tuple((tag_whitespace("equals"), escaped_string)),
                 |(_, string)| Ok(Transformer::EqualsString(string.into_boxed_str())),
+            ),
+            map(
+                tuple((
+                    tag_whitespace("in"),
+                    tag_whitespace("["),
+                    separated_list(tag_whitespace(","), escaped_string),
+                    tag("]"),
+                )),
+                |(_, _, list, _)| {
+                    Ok(Transformer::InStrings(
+                        list.into_iter()
+                            .map(|string| string.into_boxed_str())
+                            .collect(),
+                    ))
+                },
             ),
             map(
                 tuple((tag_whitespace("capture"), escaped_string)),
@@ -191,7 +233,7 @@ fn transformer_expression(i: &str) -> IResult<&str, Result<TransformerExpression
     })(i)
 }
 
-pub fn extractor_expression<P: Parseable>(
+pub fn extractor_expression<P: Parseable + Typed>(
     i: &str,
 ) -> IResult<&str, Result<ExtractorExpression<P>, String>> {
     map(
@@ -205,7 +247,7 @@ pub fn extractor_expression<P: Parseable>(
     )(i)
 }
 
-pub fn exploding_extractor_expression<P: Parseable>(
+pub fn exploding_extractor_expression<P: Parseable + Typed>(
     i: &str,
 ) -> IResult<&str, Result<ExplodingExtractorExpression<P>, String>> {
     map(
@@ -222,7 +264,7 @@ pub fn exploding_extractor_expression<P: Parseable>(
     )(i)
 }
 
-pub fn aggregator<P: Parseable>(i: &str) -> IResult<&str, Result<Aggregator<P>, String>> {
+pub fn aggregator<P: Parseable + Typed>(i: &str) -> IResult<&str, Result<Aggregator<P>, String>> {
     alt((
         map(
             tuple((
@@ -286,7 +328,7 @@ pub fn aggregator<P: Parseable>(i: &str) -> IResult<&str, Result<Aggregator<P>, 
     ))(i)
 }
 
-pub fn aggregator_expression<P: Parseable>(
+pub fn aggregator_expression<P: Parseable + Typed>(
     i: &str,
 ) -> IResult<&str, Result<AggregatorExpression<P>, String>> {
     map(

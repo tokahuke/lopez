@@ -127,7 +127,11 @@ pub enum Transformer {
     AsNumber,
     GreaterThan(f64),
     LesserThan(f64),
+    GreaterOrEqual(f64), // missing docs!
+    LesserOrEqual(f64),  // missing docs!
+    Between(f64, f64),   // missing docs!
     Equals(f64),
+    In(Box<[f64]>), // missing docs!
 
     // Collections:
     Length,
@@ -137,13 +141,16 @@ pub enum Transformer {
     Flatten,
     Each(TransformerExpression),
     Filter(TransformerExpression),
-    Any(TransformerExpression), // missing docs!
-    All(TransformerExpression), // missing docs!
-    Sort,                       // missing docs!
+    Any(TransformerExpression),    // missing docs!
+    All(TransformerExpression),    // missing docs!
+    Sort,                          // missing docs!
+    SortBy(TransformerExpression), // missing docs!
 
     // String manipulation
+    AsString,
     Pretty,
-    EqualsString(Box<str>), // missing docs!
+    EqualsString(Box<str>),     // missing docs!
+    InStrings(Box<[Box<str>]>), // missing docs!
 
     // Regex:
     Capture(ComparableRegex),
@@ -162,7 +169,18 @@ impl fmt::Display for Transformer {
             Transformer::AsNumber => write!(f, "as-number"),
             Transformer::GreaterThan(num) => write!(f, "greater-than {}", num),
             Transformer::LesserThan(num) => write!(f, "lesser-than {}", num),
+            Transformer::GreaterOrEqual(num) => write!(f, "greater-or-equal {}", num),
+            Transformer::LesserOrEqual(num) => write!(f, "lesser-or-equal {}", num),
+            Transformer::Between(low, high) => write!(f, "between {} and {}", low, high),
             Transformer::Equals(num) => write!(f, "equals {}", num),
+            Transformer::In(nums) => write!(
+                f,
+                "in [{}]",
+                nums.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Transformer::Length => write!(f, "length"),
             Transformer::IsEmpty => write!(f, "is-empty"),
             Transformer::Get(key) => write!(f, "get {:?}", key),
@@ -173,11 +191,14 @@ impl fmt::Display for Transformer {
             Transformer::Any(transformer) => write!(f, "any({})", transformer),
             Transformer::All(transformer) => write!(f, "all({})", transformer),
             Transformer::Sort => write!(f, "sort"),
+            Transformer::SortBy(transformer) => write!(f, "sort-by({})", transformer),
             Transformer::Capture(ComparableRegex(regex)) => {
                 write!(f, "capture {:?}", regex.as_str())
             }
+            Transformer::AsString => write!(f, "as-string"),
             Transformer::Pretty => write!(f, "pretty"),
             Transformer::EqualsString(string) => write!(f, "equals {:?}", string),
+            Transformer::InStrings(strings) => write!(f, "in {:?}", strings),
             Transformer::AllCaptures(ComparableRegex(regex)) => {
                 write!(f, "all-captures {:?}", regex.as_str())
             }
@@ -205,7 +226,11 @@ impl Transformer {
             (Transformer::AsNumber, Type::String) => Ok(Type::Number),
             (Transformer::GreaterThan(_), Type::Number) => Ok(Type::Bool),
             (Transformer::LesserThan(_), Type::Number) => Ok(Type::Bool),
+            (Transformer::GreaterOrEqual(_), Type::Number) => Ok(Type::Bool),
+            (Transformer::LesserOrEqual(_), Type::Number) => Ok(Type::Bool),
+            (Transformer::Between(_, _), Type::Number) => Ok(Type::Bool),
             (Transformer::Equals(_), Type::Number) => Ok(Type::Bool),
+            (Transformer::In(_), Type::Number) => Ok(Type::Bool),
             (Transformer::Length, Type::String) => Ok(Type::Number),
             (Transformer::Length, Type::Array(_)) => Ok(Type::Number),
             (Transformer::Length, Type::Map(_)) => Ok(Type::Number),
@@ -259,9 +284,21 @@ impl Transformer {
                     predicate.expected(&Type::Bool, &predicate_typ)
                 }
             }
-            (Transformer::Sort, typ) if !typ.is_map() => Ok(typ.clone()),
+            (Transformer::Sort, Type::Array(typ)) if !typ.is_map() => Ok(Type::Array(typ.clone())),
+            (Transformer::SortBy(key), Type::Array(typ)) => {
+                let key_typ = key.type_for(typ)?;
+                if !key_typ.is_map() {
+                    Ok(Type::Array(typ.clone()))
+                } else {
+                    key.not_expected(&key_typ)
+                }
+            }
+            (Transformer::AsString, Type::Number) => Ok(Type::String),
+            (Transformer::AsString, Type::Bool) => Ok(Type::String),
+            (Transformer::AsString, Type::String) => Ok(Type::String),            
             (Transformer::Pretty, Type::String) => Ok(Type::String),
             (Transformer::EqualsString(_), Type::String) => Ok(Type::Bool),
+            (Transformer::InStrings(_), Type::String) => Ok(Type::Bool),
             (Transformer::Capture(_), Type::String) => Ok(Type::Map(Box::new(Type::String))),
             (Transformer::AllCaptures(_), Type::String) => {
                 Ok(Type::Array(Box::new(Type::Map(Box::new(Type::String)))))
@@ -293,9 +330,22 @@ impl Transformer {
                 .unwrap_or(Value::Null),
             (&Transformer::GreaterThan(rhs), Value::Number(lhs)) => (force_f64(&lhs) > rhs).into(),
             (&Transformer::LesserThan(rhs), Value::Number(lhs)) => (force_f64(&lhs) < rhs).into(),
+            (&Transformer::GreaterOrEqual(rhs), Value::Number(lhs)) => {
+                (force_f64(&lhs) > rhs).into()
+            }
+            (&Transformer::LesserOrEqual(rhs), Value::Number(lhs)) => {
+                (force_f64(&lhs) <= rhs).into()
+            }
+            (&Transformer::Between(low, high), Value::Number(lhs)) => {
+                (force_f64(&lhs) >= low && force_f64(&lhs) <= high).into()
+            }
             (&Transformer::Equals(rhs), Value::Number(lhs)) => {
                 ((force_f64(&lhs) - rhs).abs() < std::f64::EPSILON).into()
             }
+            (Transformer::In(nums), Value::Number(lhs)) => nums
+                .iter()
+                .any(|rhs| ((force_f64(&lhs) - rhs).abs() < std::f64::EPSILON))
+                .into(),
             (Transformer::Length, Value::Array(array)) => array.len().into(),
             (Transformer::Length, Value::String(string)) => string.len().into(),
             (Transformer::Length, Value::Object(object)) => object.len().into(),
@@ -370,10 +420,22 @@ impl Transformer {
                 array.sort_unstable_by(cmp_json);
                 array.into()
             }
+            (Transformer::SortBy(key), Value::Array(array)) => {
+                let mut array = array.clone();
+                array.sort_unstable_by(|a, b| cmp_json(&key.eval(a.clone()), &key.eval(b.clone())));
+                array.into()
+            }
+            (Transformer::AsString, Value::Number(num)) => num.to_string().into(),
+            (Transformer::AsString, Value::Bool(b)) => b.to_string().into(),
+            (Transformer::AsString, Value::String(string)) => Value::String(string),
             (Transformer::Pretty, Value::String(string)) => pretty(&string).into(),
             (Transformer::EqualsString(this), Value::String(other)) => {
                 (this.as_ref() == other.as_str()).into()
             }
+            (Transformer::InStrings(strings), Value::String(other)) => strings
+                .iter()
+                .any(|string| string.as_ref() == other.as_str())
+                .into(),
             (Transformer::Capture(ComparableRegex(regex)), Value::String(string)) => regex
                 .captures(&string)
                 .map(|captures| capture_json(&regex, captures).into())
@@ -429,6 +491,13 @@ impl TransformerExpression {
             thing: self.to_string(),
             expected: expected.clone(),
             got: got.clone(),
+        })
+    }
+
+    fn not_expected<T>(&self, not_expected: &Type) -> Result<T, Error> {
+        Err(Error::NotExpectedType {
+            thing: self.to_string(),
+            not_expected: not_expected.clone(),
         })
     }
 
