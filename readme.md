@@ -58,6 +58,8 @@ For more information on backends, see the documentation for the `lib_lopez::back
 By now, Lopez only compiles on Rust Nightly. Unfortunately, we are waiting on the following features to be stabilized:
 * `move_ref_pattern`: https://github.com/rust-lang/rust/issues/68354
 
+Good news: stabilization is due in a few days!
+
 ## Features
 
 Let's brag a little!
