@@ -3,7 +3,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crate::cli::Profile;
-use crate::directives::{SetVariables, Variable};
 
 #[derive(Debug, Default)]
 pub struct Counter {
@@ -65,25 +64,24 @@ impl Counter {
 pub async fn log_stats(
     counter: Arc<Counter>,
     already_done: usize,
+    effective_quota: usize,
     profile: Arc<Profile>,
-    variables: Arc<SetVariables>,
 ) {
-    if !profile.do_not_log_stats {
+    if profile.do_not_log_stats {
+        log::info!("Not logging stats. Set `LOG_STATS_EVERY_SECS` to see them.");
+    } else {
         let log_interval = profile.log_stats_every_secs;
         log::info!("Logging stats every {} seconds.", log_interval);
 
         let mut interval =
             tokio::time::interval(tokio::time::Duration::from_secs_f64(log_interval));
-        let quota = variables.get_as_u64(Variable::Quota).expect("bad val") as usize;
-        let mut tracker = StatsTracker::new(already_done, quota, counter, log_interval);
+        let mut tracker = StatsTracker::new(already_done, effective_quota, counter, log_interval);
 
         loop {
             interval.tick().await;
             tracker.tick();
             log::info!("{}", tracker.get_stats());
         }
-    } else {
-        log::info!("Not logging stats. Set `LOG_STATS_EVERY_SECS` to see them.");
     }
 }
 
@@ -112,6 +110,14 @@ impl StatsTracker {
     }
 
     pub fn tick(&mut self) {
+        let recently_done = self.already_done + self.counter.n_closed()
+        - self.counter.n_error()
+        - self
+            .last
+            .as_ref()
+            .map(|last| last.n_done.0)
+            .unwrap_or(self.already_done);
+        
         let stats = Stats {
             n_active: self.counter.n_active(),
             n_done: FromTotal(
@@ -133,6 +139,7 @@ impl StatsTracker {
                     / self.delta_t,
                 "/s",
             ),
+            recently_done,
             downloaded: Human(
                 self.counter.download_count.load(Ordering::Relaxed) as f64,
                 "B",
@@ -200,6 +207,7 @@ pub struct Stats {
     n_done: FromTotal,
     n_errors: FromTotal,
     hit_rate: Human,
+    recently_done: usize,
     downloaded: Human,
     download_speed: Human,
 }
@@ -210,6 +218,7 @@ impl Display for Stats {
         writeln!(f, "\tn. active = {}", self.n_active)?;
         writeln!(f, "\tn. done = {}", self.n_done)?;
         writeln!(f, "\tn. errors = {}", self.n_errors)?;
+        writeln!(f, "\trecently done = {}", self.recently_done)?;
         writeln!(f, "\thit rate = {}", self.hit_rate)?;
         writeln!(f, "\tdownloaded = {}", self.downloaded)?;
         writeln!(f, "\tdownload speed = {}", self.download_speed)?;

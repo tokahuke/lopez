@@ -46,21 +46,25 @@ pub async fn start<B: Backend>(
     // Creates a counter to get stats:
     let counter = Arc::new(Counter::default());
 
-    // Creates crawlers:
+    // Calculation of how many pages to crawl, after all:
     let crawl_counter = counter.clone();
     let consumed = master_model
         .count_crawled()
         .await
         .map_err(|err| err.into())?;
-    let remaining_quota =
-        (variables.get_as_u64(Variable::Quota).expect("bad val") as usize).saturating_sub(consumed);
+    let crawl_quota = variables.get_as_u64(Variable::Quota).expect("bad val") as usize;
+    let max_quota = profile.max_quota.unwrap_or(std::usize::MAX);
+    let effective_quota = usize::min(max_quota, crawl_quota);
+    // Whether enough juice was given for the crawl to get to the end:
+    let will_crawl_end = crawl_quota >= max_quota;
+    let remaining_quota = (effective_quota).saturating_sub(consumed);
 
     // Spawn task that will log stats from time to time:
     let _stats_handle = tokio::spawn(log_stats(
         counter.clone(),
         consumed,
+        effective_quota,
         profile.clone(),
-        variables.clone(),
     ));
 
     let crawl_profile = profile.clone();
@@ -181,7 +185,13 @@ pub async fn start<B: Backend>(
         canceler.cancel().await;
     }
 
-    if !is_interrupted {
+    if is_interrupted {
+        log::info!("crawl was interrupted");
+        Err(crate::Error::Custom("crawl was interrupted".to_owned()))
+    } else if !will_crawl_end {
+        log::info!("crawl incomplete: not enough `MAX_QUOTA` given");
+        Ok(())
+    } else {
         log::info!("crawl done");
 
         // Now, do page rank, if enabled:
@@ -193,9 +203,6 @@ pub async fn start<B: Backend>(
         }
 
         Ok(())
-    } else {
-        log::info!("crawl was interrupted");
-        Err(crate::Error::Custom("crawl was interrupted".to_owned()))
     }
 }
 
