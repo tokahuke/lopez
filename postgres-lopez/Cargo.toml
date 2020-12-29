@@ -1,6 +1,6 @@
 [package]
 name = "postgres-lopez"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Pedro Arruda <pedrobittencourt3@protonmail.ch>"]
 edition = "2018"
 
