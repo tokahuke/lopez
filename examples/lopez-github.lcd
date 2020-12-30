@@ -1,0 +1,30 @@
+import "seo";
+
+// Tell lopez to stay within the repository
+allow "^https://github\.com/tokahuke/lopez(:?/|$)"; // this is a regular expression
+
+// But don't let it browse every tiny commit in history:
+disallow "/([a-f0-9]{40})"; // commit hashes in the URL
+
+// Start from the repo homepage:
+seed "https://github.com/tokahuke/lopez";
+
+// set a quota of 500 pages only (you can try with more later...)
+set quota = 500;
+
+// Now, let's make some "very interesting analysis":
+
+// In the wiki pages, get the h1 headers:
+select in "lopez/wiki" .repository-content h1 {
+   wiki-title: first(text);
+}
+
+// In the Issues section, get the issue title:
+select in "lopez/issues" h1 .js-issue-title {
+   issue-title: first(text);
+}
+
+// ... and don't forget the status.
+select in "lopez/issues" span.State {
+   issue-status: first(attr "title" capture "Status: (.*)" get "1");
+}
