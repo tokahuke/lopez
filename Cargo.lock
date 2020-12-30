@@ -389,7 +389,7 @@ checksum = "cd56b59865bce947ac5958779cfa508f6c3b9497cc762b7e24a12d11ccde2c4f"
 
 [[package]]
 name = "entalator"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "include_dir",
  "lopez",
@@ -910,7 +910,7 @@ dependencies = [
 
 [[package]]
 name = "lib-lopez"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "ansi_term 0.12.1",
  "async-trait",
@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "lopez"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "jemallocator",
  "lib-lopez",
@@ -1392,7 +1392,7 @@ dependencies = [
 
 [[package]]
 name = "postgres-lopez"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "failure",
  "failure_derive",

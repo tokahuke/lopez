@@ -17,6 +17,10 @@ select h1 {
     count-h1: count;
 }
 
+select h2 {
+    h2s: collect(text);
+}
+
 select link[rel="canonical"] {
     canonical: first(attr "href");
     count-canonical: count;

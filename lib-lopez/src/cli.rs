@@ -98,6 +98,11 @@ pub struct Profile {
     /// The size of the batches of URL that are to be fetched from the backend.
     #[structopt(long, default_value = "1024", env)]
     pub batch_size: usize,
+    /// The maximum number of pages that will be analyzed in this process 
+    /// invocation. This is a limit at a _process level_, instead of the `set 
+    /// quota` set-variable, which is a limit at the _crawl level_.
+    #[structopt(long, env)]
+    pub max_quota: Option<usize>,
 }
 
 impl Default for Profile {
@@ -109,6 +114,7 @@ impl Default for Profile {
             do_not_log_stats: false,
             log_stats_every_secs: 2.0,
             batch_size: 1024,
+            max_quota: None,
         }
     }
 }
