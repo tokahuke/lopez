@@ -47,3 +47,4 @@ cached = { version = "0.19.0", default-features = false }
 smallvec = "1.4.2"
 colored_json = "2.1.0"
 serde_regex = "1.1.0"
+fantoccini = "0.16.0"
