@@ -4,6 +4,7 @@ use ansi_term::Color::{self, Blue, Green, Purple, Red, White, Yellow};
 use colored_json::to_colored_json_auto;
 use hyper::StatusCode;
 use url::Url;
+use serde::ser::{Serialize, Serializer, SerializeStructVariant, SerializeTupleVariant};
 
 use crate::crawler::{Crawled, ReportType, TestRunReport};
 
@@ -137,6 +138,51 @@ impl TestRunReport {
                 } else {
                     println!("Analyses:\n    {}", pretty_analises.join("\n    "),);
                 }
+            }
+        }
+    }
+}
+
+
+impl Serialize for Crawled {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer, {
+        match self {
+            Self::Success {
+                status_code,
+                links,
+                analyses,
+            } => {
+                let mut variant = serializer.serialize_struct_variant("Crawled", 0, "Success", 3)?;
+                variant.serialize_field("status_code", &status_code.as_u16())?;
+                variant.serialize_field("links", &links)?;
+                variant.serialize_field("analyses", &analyses)?;
+                variant.end()
+            },
+            Self::BadStatus {
+                status_code,
+            } => {
+                let mut variant = serializer.serialize_struct_variant("Crawled", 0, "BadStatusCode", 3)?;
+                variant.serialize_field("status_code", &status_code.as_u16())?;
+                variant.end()
+            }
+            Self::Redirect {
+                status_code,
+                location,
+            } => {
+                let mut variant = serializer.serialize_struct_variant("Crawled", 0, "Redirect", 3)?;
+                variant.serialize_field("status_code", &status_code.as_u16())?;
+                variant.serialize_field("location", &location)?;
+                variant.end()
+            },
+            Self::Error(error) => {
+                let mut variant = serializer.serialize_tuple_variant("Crawled", 0, "Error", 0)?;
+                variant.serialize_field(&error.to_string())?; // gambiarra
+                variant.end()
+            },
+            Self::TimedOut => {
+                serializer.serialize_unit_variant("Crawled", 0, "TimedOut")
             }
         }
     }

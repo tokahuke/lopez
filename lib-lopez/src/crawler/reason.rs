@@ -1,4 +1,6 @@
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+use serde_derive::Serialize;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum Reason {
     Ahref,
     Redirect,
