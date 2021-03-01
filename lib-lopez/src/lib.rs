@@ -94,7 +94,7 @@ macro_rules! main {
                         .map(|_| Some("valid configuration".to_owned()))
                         .map_err(|err| err.into())
                 }
-                LopezApp::Test { source, test_url } => {
+                LopezApp::Test { source, test_url, json } => {
                     // Conditionally init logging:
                     if cli.verbose {
                         $crate::init_logger(cli.verbose);
@@ -111,8 +111,12 @@ macro_rules! main {
                                 $crate::test_url(Arc::new(Profile::default()), directives, url)
                                     .await;
 
-                            // Show report (TODO bad representation! make something pretty):
-                            report.pretty_print();
+                            // Show report:
+                            if json {
+                                println!("{}", serde_json::to_string_pretty(&report).expect("can deserialize"));
+                            } else {
+                                report.pretty_print();
+                            }
 
                             Ok(None)
                         }

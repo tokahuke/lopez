@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 use url::{ParseError, Url};
+use serde_derive::Serialize;
 
 use crate::backend::{WorkerBackend, WorkerBackendFactory};
 use crate::cancel::{spawn_onto_thread, Canceler};
@@ -120,13 +121,13 @@ pub(crate) enum Crawled {
     TimedOut,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct TestRunReport {
     pub(crate) actual_url: Url,
     pub(crate) report: ReportType,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub(crate) enum ReportType {
     DisallowedByDirectives,
     DisallowedByOrigin,

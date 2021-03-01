@@ -47,6 +47,9 @@ macro_rules! cli_impl {
                 /// The URL to be used for testing.
                 #[structopt(env)]
                 test_url: String,
+                /// Whether to use JSON formatting in the output
+                #[structopt(long, env)]
+                json: bool,
             },
             /// Runs the page rank algorithm on the supplied wave.
             PageRank {
