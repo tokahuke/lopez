@@ -295,7 +295,7 @@ impl Transformer {
             }
             (Transformer::AsString, Type::Number) => Ok(Type::String),
             (Transformer::AsString, Type::Bool) => Ok(Type::String),
-            (Transformer::AsString, Type::String) => Ok(Type::String),            
+            (Transformer::AsString, Type::String) => Ok(Type::String),
             (Transformer::Pretty, Type::String) => Ok(Type::String),
             (Transformer::EqualsString(_), Type::String) => Ok(Type::Bool),
             (Transformer::InStrings(_), Type::String) => Ok(Type::Bool),

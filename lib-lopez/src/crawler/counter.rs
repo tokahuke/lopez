@@ -111,13 +111,13 @@ impl StatsTracker {
 
     pub fn tick(&mut self) {
         let recently_done = self.already_done + self.counter.n_closed()
-        - self.counter.n_error()
-        - self
-            .last
-            .as_ref()
-            .map(|last| last.n_done.0)
-            .unwrap_or(self.already_done);
-        
+            - self.counter.n_error()
+            - self
+                .last
+                .as_ref()
+                .map(|last| last.n_done.0)
+                .unwrap_or(self.already_done);
+
         let stats = Stats {
             n_active: self.counter.n_active(),
             n_done: FromTotal(

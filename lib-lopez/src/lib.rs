@@ -94,14 +94,32 @@ macro_rules! main {
                         .map(|_| Some("valid configuration".to_owned()))
                         .map_err(|err| err.into())
                 }
-                LopezApp::Test { source, test_url, json } => {
+                LopezApp::Test {
+                    source,
+                    test_url,
+                    json,
+                } => {
                     // Conditionally init logging:
                     if cli.verbose {
                         $crate::init_logger(cli.verbose);
                     }
 
                     match Url::parse(&test_url) {
-                        Err(err) => Err(err.into()),
+                        // TODO: (known issue) structured output messes the expected return status...
+                        Err(err) => {
+                            if json {
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(
+                                        &Err(format!("{}", err)) as &Result<(), _>
+                                    )
+                                    .expect("can serialize")
+                                );
+                                Ok(None)
+                            } else {
+                                Err(err.into())
+                            }
+                        }
                         Ok(url) => {
                             // Open directives:
                             let directives = Arc::new(Directives::load(source, cli.import_path)?);
@@ -113,7 +131,11 @@ macro_rules! main {
 
                             // Show report:
                             if json {
-                                println!("{}", serde_json::to_string_pretty(&report).expect("can deserialize"));
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&Ok(report) as &Result<_, ()>)
+                                        .expect("can deserialize")
+                                );
                             } else {
                                 report.pretty_print();
                             }

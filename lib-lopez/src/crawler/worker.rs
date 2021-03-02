@@ -8,12 +8,12 @@ use lazy_static::lazy_static;
 use libflate::deflate::Decoder as DeflateDecoder;
 use libflate::gzip::Decoder as GzipDecoder;
 use scraper::{Html, Selector};
+use serde_derive::Serialize;
 use std::io::Read;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 use url::{ParseError, Url};
-use serde_derive::Serialize;
 
 use crate::backend::{WorkerBackend, WorkerBackendFactory};
 use crate::cancel::{spawn_onto_thread, Canceler};
