@@ -3,7 +3,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::{env, fs, io};
 
-const LOPEZ_BIN: &[u8] = include_bytes!("../../target/release/lopez");
+const LOPEZ_BIN: &[u8] = include_bytes!("../../target/x86_64-unknown-linux-musl/release/lopez");
 const LOPEZ_LIB: Dir = include_dir::include_dir!("../std-lopez");
 
 const LIB_PATH: &str = "/usr/share/lopez/lib";
