@@ -290,16 +290,9 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             })) if status_code.is_success() => {
                 // Search HTML:
                 let html = Html::parse_document(&String::from_utf8_lossy(&content));
-
-                // Only *one* representative for each (reason, link) pair. This may ease the load
-                // on the database and avoid dumb stuff in general.
-                let links = {
-                    let mut raw_links = tree_search(&html);
-                    // Old database trick!
-                    raw_links.sort_unstable();
-                    raw_links.dedup();
-                    raw_links
-                };
+                let links = tree_search(&html);
+                
+                eprintln!("{:#?}", links);
 
                 log::debug!("found: {:?}", links);
 
@@ -307,7 +300,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                 let filtered_links = if self.boundaries.is_frontier(page_url) {
                     vec![]
                 } else {
-                    links
+                    let mut raw_links = links
                         .into_iter()
                         .filter_map(|(reason, raw)| match checked_join(page_url, raw) {
                             Ok(url) => Some((reason, self.boundaries.filter_query_params(url))),
@@ -318,7 +311,13 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                         })
                         .filter(|(_reason, url)| self.boundaries.is_allowed(url))
                         .map(|(reason, url)| (reason, self.boundaries.filter_query_params(url)))
-                        .collect::<Vec<_>>()
+                        .collect::<Vec<_>>();
+                    
+                    // Only *one* representative for each (reason, link) pair. This may ease the load
+                    // on the database and avoid dumb stuff in general.
+                    raw_links.sort_unstable();
+                    raw_links.dedup();
+                    raw_links
                 };
 
                 let analyses = self.analyzer.analyze(page_url, &html);

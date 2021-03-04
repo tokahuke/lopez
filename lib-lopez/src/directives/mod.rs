@@ -61,8 +61,12 @@ fn load_items_from<'a, P: AsRef<Path>>(
     // need to put these paths in the other map_errs.
     let printable_paths = paths.iter().map(P::as_ref).collect::<Vec<_>>();
 
-    let (path, module_str) = read_from_many(paths)
-        .map_err(|err| format!("could not open module `{}` from paths `{:?}`: {}", formatted_module_name, printable_paths, err))?;
+    let (path, module_str) = read_from_many(paths).map_err(|err| {
+        format!(
+            "could not open module `{}` from paths `{:?}`: {}",
+            formatted_module_name, printable_paths, err
+        )
+    })?;
 
     let module = parse::entrypoint(&module_str)
         .map_err(|err| format!("failed to parse `{}`: {}", formatted_module_name, err))?
@@ -377,7 +381,10 @@ impl Directives {
 
     /// Loads directives from a given file while also loading all dependencies.
     pub fn load<P: AsRef<Path>, Q: AsRef<Path>>(path: P, imports: Q) -> Result<Self, String> {
-        let parent = path.as_ref().parent().ok_or_else(|| "path cannot be root".to_owned())?;
+        let parent = path
+            .as_ref()
+            .parent()
+            .ok_or_else(|| "path cannot be root".to_owned())?;
         let mut modules = BTreeMap::new();
 
         Module::load(
