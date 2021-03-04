@@ -290,7 +290,17 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             })) if status_code.is_success() => {
                 // Search HTML:
                 let html = Html::parse_document(&String::from_utf8_lossy(&content));
-                let links = tree_search(&html);
+
+                // Only *one* representative for each (reason, link) pair. This may ease the load
+                // on the database and avoid dumb stuff in general.
+                let links = {
+                    let mut raw_links = tree_search(&html);
+                    // Old database trick!
+                    raw_links.sort_unstable();
+                    raw_links.dedup();
+                    raw_links
+                };
+
                 log::debug!("found: {:?}", links);
 
                 // Now, parse and see what stays in and what goes away:
