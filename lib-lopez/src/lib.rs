@@ -121,26 +121,45 @@ macro_rules! main {
                             }
                         }
                         Ok(url) => {
+
                             // Open directives:
-                            let directives = Arc::new(Directives::load(source, cli.import_path)?);
+                            match Directives::load(source, cli.import_path) {
+                                Err(err) => {
+                                    if json {
+                                        println!(
+                                            "{}",
+                                            serde_json::to_string_pretty(
+                                                &Err(format!("{}", err)) as &Result<(), _>
+                                            )
+                                            .expect("can serialize")
+                                        );
+                                        Ok(None)
+                                    } else {
+                                        Err(err.into())
+                                    }
+                                }
+                                Ok(directives) => {
+                                    let directives = Arc::new(directives);
 
-                            // Create report:
-                            let report =
-                                $crate::test_url(Arc::new(Profile::default()), directives, url)
-                                    .await;
+                                    // Create report:
+                                    let report =
+                                    $crate::test_url(Arc::new(Profile::default()), directives, url)
+                                        .await;
 
-                            // Show report:
-                            if json {
-                                println!(
-                                    "{}",
-                                    serde_json::to_string_pretty(&Ok(report) as &Result<_, ()>)
-                                        .expect("can deserialize")
-                                );
-                            } else {
-                                report.pretty_print();
+                                    // Show report:
+                                    if json {
+                                    println!(
+                                        "{}",
+                                        serde_json::to_string_pretty(&Ok(report) as &Result<_, ()>)
+                                            .expect("can deserialize")
+                                    );
+                                    } else {
+                                    report.pretty_print();
+                                    }
+
+                                    Ok(None)
+                                }
                             }
-
-                            Ok(None)
                         }
                     }
                 }
