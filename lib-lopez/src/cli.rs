@@ -11,6 +11,9 @@ macro_rules! cli_impl {
         pub struct Cli {
             #[structopt(short = "v", long)]
             pub verbose: bool,
+            /// Whether to use JSON formatting in the output
+            #[structopt(short= "j", long, env)]
+            json: bool,
             #[structopt(long, env, default_value = "/usr/share/lopez/lib")]
             pub import_path: PathBuf,
             #[structopt(subcommand)]
@@ -47,9 +50,6 @@ macro_rules! cli_impl {
                 /// The URL to be used for testing.
                 #[structopt(env)]
                 test_url: String,
-                /// Whether to use JSON formatting in the output
-                #[structopt(long, env)]
-                json: bool,
             },
             /// Runs the page rank algorithm on the supplied wave.
             PageRank {
