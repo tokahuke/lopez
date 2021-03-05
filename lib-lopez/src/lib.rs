@@ -56,20 +56,37 @@ macro_rules! main {
         pub async fn main() {
             use $crate::ansi_term::Color::{Green, Red};
 
-            match run().await {
-                Ok(Some(msg)) => {
-                    println!("{}: {}", Green.bold().paint("ok"), msg);
-                    std::process::exit(0)
+            // Environment interpretation:
+            let cli = Cli::from_args();
+
+            if cli.json {
+                match run(cli).await {
+                    Ok(Some(msg)) => {
+                        println!("{}", serde_json::json!({ "Ok": msg }));
+                        std::process::exit(0)
+                    }
+                    Ok(None) => std::process::exit(1),
+                    Err(err) => {
+                        println!("{}", serde_json::json!({ "Err": err.to_string() }));
+                        std::process::exit(1)
+                    }
                 }
-                Ok(None) => std::process::exit(1),
-                Err(err) => {
-                    println!("{}: {}", Red.bold().paint("error"), err);
-                    std::process::exit(1)
+            } else {
+                match run(cli).await {
+                    Ok(Some(msg)) => {
+                        println!("{}: {}", Green.bold().paint("ok"), msg);
+                        std::process::exit(0)
+                    }
+                    Ok(None) => std::process::exit(1),
+                    Err(err) => {
+                        println!("{}: {}", Red.bold().paint("error"), err);
+                        std::process::exit(1)
+                    }
                 }
             }
         }
 
-        async fn run() -> Result<Option<String>, $crate::Error> {
+        async fn run(cli: Cli) -> Result<Option<String>, $crate::Error> {
             use std::sync::Arc;
 
             use $crate::ansi_term::Color::Red;
@@ -78,9 +95,6 @@ macro_rules! main {
 
             #[cfg(windows)]
             let enabled = colored_json::enable_ansi_support();
-
-            // Environment interpretation:
-            let cli = Cli::from_args();
 
             match cli.app {
                 LopezApp::Validate { source } => {
@@ -97,7 +111,6 @@ macro_rules! main {
                 LopezApp::Test {
                     source,
                     test_url,
-                    json,
                 } => {
                     // Conditionally init logging:
                     if cli.verbose {
@@ -107,7 +120,7 @@ macro_rules! main {
                     match Url::parse(&test_url) {
                         // TODO: (known issue) structured output messes the expected return status...
                         Err(err) => {
-                            if json {
+                            if cli.json {
                                 println!(
                                     "{}",
                                     serde_json::to_string_pretty(
@@ -121,11 +134,10 @@ macro_rules! main {
                             }
                         }
                         Ok(url) => {
-
                             // Open directives:
                             match Directives::load(source, cli.import_path) {
                                 Err(err) => {
-                                    if json {
+                                    if cli.json {
                                         println!(
                                             "{}",
                                             serde_json::to_string_pretty(
@@ -142,19 +154,18 @@ macro_rules! main {
                                     let directives = Arc::new(directives);
 
                                     // Create report:
-                                    let report =
-                                    $crate::test_url(Arc::new(Profile::default()), directives, url)
+                                    let report = $crate::test_url(Arc::new(Profile::default()), directives, url)
                                         .await;
 
                                     // Show report:
-                                    if json {
-                                    println!(
-                                        "{}",
-                                        serde_json::to_string_pretty(&Ok(report) as &Result<_, ()>)
-                                            .expect("can deserialize")
-                                    );
+                                    if cli.json {
+                                        println!(
+                                            "{}",
+                                            serde_json::to_string_pretty(&Ok(report) as &Result<_, ()>)
+                                                .expect("can deserialize")
+                                        );
                                     } else {
-                                    report.pretty_print();
+                                        report.pretty_print();
                                     }
 
                                     Ok(None)

@@ -292,8 +292,6 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                 let html = Html::parse_document(&String::from_utf8_lossy(&content));
                 let links = tree_search(&html);
                 
-                eprintln!("{:#?}", links);
-
                 log::debug!("found: {:?}", links);
 
                 // Now, parse and see what stays in and what goes away:
