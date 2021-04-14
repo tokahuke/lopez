@@ -5,9 +5,10 @@ mod master;
 mod ranker;
 mod worker;
 
+use std::rc::Rc;
 use std::sync::Arc;
 
-use lib_lopez::backend::{async_trait, Backend, WorkerBackendFactory};
+use lib_lopez::backend::{async_trait, Backend, WaveRemoveReport, WorkerBackendFactory};
 
 use crate::db::DbConfig;
 use crate::error::Error;
@@ -21,6 +22,16 @@ const REMOVE_WAVE: &str = include_str!("sql/remove_wave.sql");
 pub struct PostgresBackend {
     config: Arc<DbConfig>,
     wave: String,
+}
+
+impl PostgresBackend {
+    async fn connect(&self) -> Result<Rc<tokio_postgres::Client>, crate::Error> {
+        self.config.connect().await
+    }
+
+    async fn init(config: Arc<DbConfig>, wave: String) -> Result<PostgresBackend, crate::Error> {
+        Ok(PostgresBackend { config, wave })
+    }
 }
 
 #[async_trait(?Send)]
@@ -40,14 +51,11 @@ impl Backend for PostgresBackend {
         config.ensure_create_db().await?;
         config.clone().sync_migrations().await?;
 
-        Ok(PostgresBackend {
-            config,
-            wave: wave.to_owned(),
-        })
+        PostgresBackend::init(config, wave.to_owned()).await
     }
 
     async fn build_master(&mut self) -> Result<Self::Master, crate::Error> {
-        Ok(PostgresMasterBackend::init(self.config.connect().await?, &self.wave).await?)
+        Ok(PostgresMasterBackend::init(self.connect().await?, &self.wave).await?)
     }
 
     fn build_worker_factory(&mut self, wave_id: i32) -> Self::WorkerFactory {
@@ -58,17 +66,24 @@ impl Backend for PostgresBackend {
     }
 
     async fn build_ranker(&mut self, wave_id: i32) -> Result<Self::Ranker, crate::Error> {
-        Ok(PostgresPageRanker::init(self.config.connect().await?, wave_id).await?)
+        Ok(PostgresPageRanker::init(self.connect().await?, wave_id).await?)
     }
 
-    async fn remove(&mut self) -> Result<bool, crate::Error> {
-        Ok(self
-            .config
+    async fn remove(&mut self) -> Result<WaveRemoveReport, crate::Error> {
+        let row = self
             .connect()
             .await?
             .query_opt(REMOVE_WAVE, &[&self.wave])
             .await?
-            .is_some())
+            .expect("remove_wave.sql always returns one row");
+        let report = if row.get::<_, Option<i32>>("wave_id").is_some() {
+            WaveRemoveReport::removed(row.get::<_, i32>("n_pages") as usize)
+        } else {
+            WaveRemoveReport::not_removed()
+        };
+
+        Ok(report)
+        // PostgresMasterBackend::init(self.connect().await?, &self.wave).await?.delete().await
     }
 }
 

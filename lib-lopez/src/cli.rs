@@ -12,7 +12,7 @@ macro_rules! cli_impl {
             #[structopt(short = "v", long)]
             pub verbose: bool,
             /// Whether to use JSON formatting in the output
-            #[structopt(short= "j", long, env)]
+            #[structopt(short = "j", long, env)]
             json: bool,
             #[structopt(long, env, default_value = "/usr/share/lopez/lib")]
             pub import_path: PathBuf,

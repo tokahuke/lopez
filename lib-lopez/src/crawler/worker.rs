@@ -291,7 +291,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                 // Search HTML:
                 let html = Html::parse_document(&String::from_utf8_lossy(&content));
                 let links = tree_search(&html);
-                
+
                 log::debug!("found: {:?}", links);
 
                 // Now, parse and see what stays in and what goes away:
@@ -310,7 +310,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                         .filter(|(_reason, url)| self.boundaries.is_allowed(url))
                         .map(|(reason, url)| (reason, self.boundaries.filter_query_params(url)))
                         .collect::<Vec<_>>();
-                    
+
                     // Only *one* representative for each (reason, link) pair. This may ease the load
                     // on the database and avoid dumb stuff in general.
                     raw_links.sort_unstable();

@@ -24,6 +24,7 @@ pub use directives::Directives;
 pub use error::Error;
 pub use hash::hash;
 pub use logger::init_logger;
+pub use serde::Serialize;
 pub use structopt::StructOpt;
 
 pub const fn default_user_agent() -> &'static str {
@@ -65,11 +66,12 @@ macro_rules! main {
                         println!("{}", serde_json::json!({ "Ok": msg }));
                         std::process::exit(0)
                     }
-                    Ok(None) => std::process::exit(1),
-                    Err(err) => {
+                    Ok(None) => std::process::exit(0),
+                    Err(Some(err)) => {
                         println!("{}", serde_json::json!({ "Err": err.to_string() }));
                         std::process::exit(1)
                     }
+                    Err(None) => std::process::exit(1),
                 }
             } else {
                 match run(cli).await {
@@ -77,21 +79,31 @@ macro_rules! main {
                         println!("{}: {}", Green.bold().paint("ok"), msg);
                         std::process::exit(0)
                     }
-                    Ok(None) => std::process::exit(1),
-                    Err(err) => {
+                    Ok(None) => std::process::exit(0),
+                    Err(Some(err)) => {
                         println!("{}: {}", Red.bold().paint("error"), err);
                         std::process::exit(1)
                     }
+                    Err(None) => std::process::exit(1),
                 }
             }
         }
 
-        async fn run(cli: Cli) -> Result<Option<String>, $crate::Error> {
+        async fn run(cli: Cli) -> Result<Option<String>, Option<$crate::Error>> {
             use std::sync::Arc;
 
             use $crate::ansi_term::Color::Red;
             use $crate::backend::Url;
             use $crate::Directives;
+            use $crate::Serialize;
+
+            fn print_json<T: Serialize + ?Sized>(t: &T) {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(t)
+                        .expect("can deserialize")
+                );
+            }
 
             #[cfg(windows)]
             let enabled = colored_json::enable_ansi_support();
@@ -106,7 +118,7 @@ macro_rules! main {
                     // Open directives:
                     Directives::load(source, cli.import_path)
                         .map(|_| Some("valid configuration".to_owned()))
-                        .map_err(|err| err.into())
+                        .map_err(|err| Some(err.into()))
                 }
                 LopezApp::Test {
                     source,
@@ -121,16 +133,10 @@ macro_rules! main {
                         // TODO: (known issue) structured output messes the expected return status...
                         Err(err) => {
                             if cli.json {
-                                println!(
-                                    "{}",
-                                    serde_json::to_string_pretty(
-                                        &Err(format!("{}", err)) as &Result<(), _>
-                                    )
-                                    .expect("can serialize")
-                                );
+                                print_json(&Err(format!("{}", err)) as &Result<(), _>);
                                 Ok(None)
                             } else {
-                                Err(err.into())
+                                Err(Some(err.into()))
                             }
                         }
                         Ok(url) => {
@@ -138,16 +144,10 @@ macro_rules! main {
                             match Directives::load(source, cli.import_path) {
                                 Err(err) => {
                                     if cli.json {
-                                        println!(
-                                            "{}",
-                                            serde_json::to_string_pretty(
-                                                &Err(format!("{}", err)) as &Result<(), _>
-                                            )
-                                            .expect("can serialize")
-                                        );
+                                        print_json(&Err(format!("{}", err)) as &Result<(), _>);
                                         Ok(None)
                                     } else {
-                                        Err(err.into())
+                                        Err(Some(err.into()))
                                     }
                                 }
                                 Ok(directives) => {
@@ -159,11 +159,7 @@ macro_rules! main {
 
                                     // Show report:
                                     if cli.json {
-                                        println!(
-                                            "{}",
-                                            serde_json::to_string_pretty(&Ok(report) as &Result<_, ()>)
-                                                .expect("can deserialize")
-                                        );
+                                        print_json(&Ok(report) as &Result<_, ()>);
                                     } else {
                                         report.pretty_print();
                                     }
@@ -184,10 +180,10 @@ macro_rules! main {
                     $crate::init_logger(cli.verbose);
 
                     // Open directives:
-                    let directives = Arc::new(Directives::load(source, cli.import_path)?);
+                    let directives = Arc::new(Directives::load(source, cli.import_path).map_err(|err| Some(err.into()))?);
 
                     // Create backend:
-                    let backend = <$backend_ty>::init(config, &wave_name).await?;
+                    let backend = <$backend_ty>::init(config, &wave_name).await.map_err(|err| Some(err.into()))?;
 
                     // Do the thing!
                     $crate::start(Arc::new(profile), directives, backend).await?;
@@ -203,30 +199,36 @@ macro_rules! main {
                         $crate::init_logger(cli.verbose);
                     }
 
-                    let mut backend = <$backend_ty>::init(config, &wave_name).await?;
+                    let mut backend = <$backend_ty>::init(config, &wave_name).await.map_err(|err| Some(err.into()))?;
 
-                    let was_removed = backend.remove().await?;
+                    let remove_report = backend.remove().await.map_err(|err| Some(err.into()))?;
 
-                    if was_removed {
-                        Ok(Some(format!("wave `{}` removed", wave_name)))
-                    } else if ignore {
-                        Ok(Some(format!("wave `{}` not removed (ignoring)", wave_name)))
+                    if cli.json {
+                        print_json(&remove_report);
+                        Ok(None)
                     } else {
-                        Err(
-                            format!("wave `{}` cannot be removed (does it exist?)", wave_name)
-                                .into(),
-                        )
+                        if remove_report.was_removed() {
+                            Ok(Some(format!("wave `{}` removed", wave_name)))
+                        } else if ignore {
+                            Ok(Some(format!("wave `{}` not removed (ignoring)", wave_name)))
+                        } else {
+                            Err(Some(
+                                format!("wave `{}` cannot be removed (does it exist?)", wave_name)
+                                    .into(),
+                            ))
+                        }
                     }
+
                 }
                 LopezApp::PageRank { wave_name, config } => {
                     // Init logging:
                     $crate::init_logger(cli.verbose);
 
                     // Create backend:
-                    let backend = <$backend_ty>::init(config, &wave_name).await?;
+                    let backend = <$backend_ty>::init(config, &wave_name).await.map_err(|err| Some(err.into()))?;
 
                     // Do the thing.
-                    $crate::page_rank(backend).await?;
+                    $crate::page_rank(backend).await.map_err(|err| Some(err.into()))?;
 
                     Ok(Some("page rank done".to_owned()))
                 }

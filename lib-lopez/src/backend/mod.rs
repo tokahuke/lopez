@@ -11,7 +11,35 @@ pub use crate::directives::Type;
 
 pub use self::dummy::DummyBackend;
 
+use serde_derive::Serialize;
+
 use crate::page_rank::power_iteration;
+
+#[derive(Debug, Serialize)]
+pub struct WaveRemoveReport {
+    was_removed: bool,
+    removed_pages: usize,
+}
+
+impl WaveRemoveReport {
+    pub fn not_removed() -> WaveRemoveReport {
+        WaveRemoveReport {
+            was_removed: false,
+            removed_pages: 0,
+        }
+    }
+
+    pub fn removed(removed_pages: usize) -> WaveRemoveReport {
+        WaveRemoveReport {
+            was_removed: true,
+            removed_pages: removed_pages,
+        }
+    }
+
+    pub fn was_removed(&self) -> bool {
+        self.was_removed
+    }
+}
 
 #[async_trait(?Send)]
 pub trait Backend: Sized {
@@ -27,8 +55,8 @@ pub trait Backend: Sized {
     async fn build_ranker(&mut self, wave_id: i32) -> Result<Self::Ranker, Self::Error>;
 
     /// This may become a mandatory method in future releases.
-    async fn remove(&mut self) -> Result<bool, Self::Error> {
-        Ok(false)
+    async fn remove(&mut self) -> Result<WaveRemoveReport, Self::Error> {
+        Ok(WaveRemoveReport::not_removed())
     }
 }
 

@@ -3,4 +3,4 @@ select
 from
     "status"
 where
-    search_status in ('closed', 'error') and wave_id = $1::integer
+    search_status = 'closed' and wave_id = $1::integer
