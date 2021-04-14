@@ -76,6 +76,7 @@ impl Backend for PostgresBackend {
             .query_opt(REMOVE_WAVE, &[&self.wave])
             .await?
             .expect("remove_wave.sql always returns one row");
+        
         let report = if row.get::<_, Option<i32>>("wave_id").is_some() {
             WaveRemoveReport::removed(row.get::<_, i32>("n_pages") as usize)
         } else {
