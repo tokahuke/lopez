@@ -56,7 +56,7 @@ pub async fn start<B: Backend>(
     let max_quota = profile.max_quota.unwrap_or(std::usize::MAX);
     let effective_quota = usize::min(max_quota, crawl_quota);
     // Whether enough juice was given for the crawl to get to the end:
-    let will_crawl_end = crawl_quota >= max_quota;
+    let will_crawl_end = crawl_quota <= max_quota;
     let remaining_quota = (effective_quota).saturating_sub(consumed);
 
     // Spawn task that will log stats from time to time:

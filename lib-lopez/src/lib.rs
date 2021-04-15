@@ -53,6 +53,16 @@ macro_rules! main {
         // Implements the Cli for the Backend (generics are no supported by `structopt`).
         $crate::cli_impl!($backend_ty);
 
+        use $crate::Serialize;
+
+        fn print_json<T: Serialize + ?Sized>(t: &T) {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(t)
+                    .expect("can deserialize")
+            );
+        }
+
         #[tokio::main(basic_scheduler)]
         pub async fn main() {
             use $crate::ansi_term::Color::{Green, Red};
@@ -63,12 +73,12 @@ macro_rules! main {
             if cli.json {
                 match run(cli).await {
                     Ok(Some(msg)) => {
-                        println!("{}", serde_json::json!({ "Ok": msg }));
+                        print_json(&serde_json::json!({ "Ok": msg }));
                         std::process::exit(0)
                     }
                     Ok(None) => std::process::exit(0),
                     Err(Some(err)) => {
-                        println!("{}", serde_json::json!({ "Err": err.to_string() }));
+                        print_json(&serde_json::json!({ "Err": err.to_string() }));
                         std::process::exit(1)
                     }
                     Err(None) => std::process::exit(1),
@@ -95,15 +105,6 @@ macro_rules! main {
             use $crate::ansi_term::Color::Red;
             use $crate::backend::Url;
             use $crate::Directives;
-            use $crate::Serialize;
-
-            fn print_json<T: Serialize + ?Sized>(t: &T) {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(t)
-                        .expect("can deserialize")
-                );
-            }
 
             #[cfg(windows)]
             let enabled = colored_json::enable_ansi_support();
