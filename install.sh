@@ -1,3 +1,4 @@
+#! /usr/bin/env bash
 # 
 # INSTALL LOPEZ
 #
@@ -6,7 +7,7 @@
 #
 
 echo "Building Lopez from source"
-cargo build --release --all &&
+./build.sh &&
 echo 'Installing `lopez` to `/usr/local/bin`
 Will need `sudo` for this...' &&
 sudo cp target/release/lopez /usr/local/bin &&
