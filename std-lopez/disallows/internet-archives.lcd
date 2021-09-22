@@ -1,0 +1,3 @@
+
+// The open source crowd:
+disallow "^https?://(!?[^/]+\.)?archive\.org";

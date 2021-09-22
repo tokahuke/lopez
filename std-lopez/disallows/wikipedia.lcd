@@ -1,0 +1,14 @@
+
+// Wikipedia projects (from the Wikimedia Foundation footer):
+disallow "^https?://(!?[^/]+\.)?wikipedia\.org";
+disallow "^https?://(!?[^/]+\.)?wikibooks\.org";
+disallow "^https?://(!?[^/]+\.)?wikiversity\.org";
+disallow "^https?://(!?[^/]+\.)?wikinews\.org";
+disallow "^https?://(!?[^/]+\.)?wikitionary\.org";
+disallow "^https?://(!?[^/]+\.)?wikisource\.org";
+disallow "^https?://(!?[^/]+\.)?wikiquote\.org";
+disallow "^https?://(!?[^/]+\.)?wikivoyage\.org";
+disallow "^https?://(!?[^/]+\.)?wikidata\.org";
+disallow "^https?://(!?[^/]+\.)?wikispecies\.org";
+disallow "^https?://(!?[^/]+\.)?mediawiki\.org";
+disallow "^https?://(!?[^/]+\.)?wikimedia\.org";

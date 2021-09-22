@@ -1,0 +1,10 @@
+/// This is a list of various no-no places which you would like to keep away 
+/// from, unless you are explicitely, intentfully trying to crawl them (goot
+/// luck; they are huge).
+
+// Facebook, Google and friends.
+import "social-media";
+// Wikipedia projects.
+import "wikipedia";
+// Things that have a copy of the whole Web within themselves.
+import "internet-archives";
