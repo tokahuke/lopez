@@ -285,7 +285,7 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
 
     pub fn run(self, worker_id: usize) -> (mpsc::Sender<(Url, u16)>, Canceler) {
         let max_tasks_per_worker = self.profile.max_tasks_per_worker;
-        let (url_sender, url_stream) = mpsc::channel(max_tasks_per_worker);
+        let (url_sender, url_stream) = mpsc::channel(2 * max_tasks_per_worker);
         let canceler = spawn_onto_thread(format!("lpz-wrk-{}", worker_id), move || async move {
             log::info!("worker started");
 
@@ -324,7 +324,7 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
 
                         // Register close, no matter the status.
                         worker_ref.task_counter.register_closed();
-
+ 
                         // Now, analyze results:
                         if let Err(error) = result {
                             worker_ref.task_counter.register_error();

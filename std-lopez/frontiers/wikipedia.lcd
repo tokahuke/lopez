@@ -1,14 +1,14 @@
 
 // Wikipedia projects (from the Wikimedia Foundation footer):
-frontier "^https?://[^/]*.wikipedia.org";
-frontier "^https?://[^/]*.wikibooks.org";
-frontier "^https?://[^/]*.wikiversity.org";
-frontier "^https?://[^/]*.wikinews.org";
-frontier "^https?://[^/]*.wikitionary.org";
-frontier "^https?://[^/]*.wikisource.org";
-frontier "^https?://[^/]*.wikiquote.org";
-frontier "^https?://[^/]*.wikivoyage.org";
-frontier "^https?://[^/]*.wikidata.org";
-frontier "^https?://[^/]*.wikispecies.org";
-frontier "^https?://[^/]*.mediawiki.org";
-frontier "^https?://[^/]*.wikimedia.org";
+frontier "^https?://(!?[^/]+\.)?wikipedia\.org";
+frontier "^https?://(!?[^/]+\.)?wikibooks\.org";
+frontier "^https?://(!?[^/]+\.)?wikiversity\.org";
+frontier "^https?://(!?[^/]+\.)?wikinews\.org";
+frontier "^https?://(!?[^/]+\.)?wikitionary\.org";
+frontier "^https?://(!?[^/]+\.)?wikisource\.org";
+frontier "^https?://(!?[^/]+\.)?wikiquote\.org";
+frontier "^https?://(!?[^/]+\.)?wikivoyage\.org";
+frontier "^https?://(!?[^/]+\.)?wikidata\.org";
+frontier "^https?://(!?[^/]+\.)?wikispecies\.org";
+frontier "^https?://(!?[^/]+\.)?mediawiki\.org";
+frontier "^https?://(!?[^/]+\.)?wikimedia\.org";

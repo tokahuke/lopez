@@ -1,13 +1,13 @@
 
 // A small list of big sites:
-frontier "^https?://[^/]*.google.com";
-frontier "^https?://[^/]*.youtube.com";
-frontier "^https?://[^/]*.facebook.com";
-frontier "^https?://[^/]*.twitter.com";
-frontier "^https?://[^/]*.instagram.com";
-frontier "^https?://[^/]*.whatsapp.com";
-frontier "^https?://[^/]*.linkedin.com";
-frontier "^https?://[^/]*.amazon.com";
-frontier "^https?://[^/]*.apple.com";
-frontier "^https?://[^/]*.pinterest.com";
-frontier "^https?://[^/]*.medium.com";
+frontier "^https?://(!?[^/]+\.)?google\.com";
+frontier "^https?://(!?[^/]+\.)?youtube\.com";
+frontier "^https?://(!?[^/]+\.)?facebook\.com";
+frontier "^https?://(!?[^/]+\.)?twitter\.com";
+frontier "^https?://(!?[^/]+\.)?instagram\.com";
+frontier "^https?://(!?[^/]+\.)?whatsapp\.com";
+frontier "^https?://(!?[^/]+\.)?linkedin\.com";
+frontier "^https?://(!?[^/]+\.)?amazon\.com";
+frontier "^https?://(!?[^/]+\.)?apple\.com";
+frontier "^https?://(!?[^/]+\.)?pinterest\.com";
+frontier "^https?://(!?[^/]+\.)?medium\.com";

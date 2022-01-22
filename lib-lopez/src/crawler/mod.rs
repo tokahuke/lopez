@@ -220,7 +220,7 @@ pub async fn start<C: Configuration, B: Backend>(
                 log::error!("error while fetching: {}", error.into());
                 break 'master;
             }
-            Ok(batch) => {
+            Ok(mut batch) => {
                 // TODO this is most probably buggy in a very, very clever way...
                 if batch.is_empty() {
                     // If everything sent is done (or error), then... go away!
@@ -244,6 +244,8 @@ pub async fn start<C: Configuration, B: Backend>(
                     // "Cancel the Apocalypse..."
                     has_been_empty = false;
                 }
+
+                batch.sort_unstable_by_key(|(_, depth)| *depth);
 
                 // Round robin:
                 '_dispatch: for (url, depth) in batch {

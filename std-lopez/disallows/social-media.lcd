@@ -1,0 +1,13 @@
+
+// A small list of big sites:
+disallow "^https?://(!?[^/]+\.)?google\.com";
+disallow "^https?://(!?[^/]+\.)?youtube\.com";
+disallow "^https?://(!?[^/]+\.)?facebook\.com";
+disallow "^https?://(!?[^/]+\.)?twitter\.com";
+disallow "^https?://(!?[^/]+\.)?instagram\.com";
+disallow "^https?://(!?[^/]+\.)?whatsapp\.com";
+disallow "^https?://(!?[^/]+\.)?linkedin\.com";
+disallow "^https?://(!?[^/]+\.)?amazon\.com";
+disallow "^https?://(!?[^/]+\.)?apple\.com";
+disallow "^https?://(!?[^/]+\.)?pinterest\.com";
+disallow "^https?://(!?[^/]+\.)?medium\.com";
