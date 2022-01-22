@@ -1,15 +1,8 @@
 use futures::channel::mpsc;
 use futures::future;
 use futures::prelude::*;
-use http::Request;
-use hyper::{client::HttpConnector, Body, Client, StatusCode};
-use hyper_rustls::HttpsConnector;
-use lazy_static::lazy_static;
-use libflate::deflate::Decoder as DeflateDecoder;
-use libflate::gzip::Decoder as GzipDecoder;
-use scraper::{Html, Selector};
+use hyper::StatusCode;
 use serde_derive::Serialize;
-use std::io::Read;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
@@ -18,9 +11,11 @@ use url::{ParseError, Url};
 use crate::backend::{WorkerBackend, WorkerBackendFactory};
 use crate::cancel::{spawn_onto_thread, Canceler};
 use crate::cli::Profile;
-use crate::directives::{Analyzer, Boundaries, Directives, SetVariables, Variable};
-use crate::origins::Origins;
 
+use super::origins::Origins;
+use super::boundaries::Boundaries;
+use super::downloader::{Downloaded, Downloader};
+use super::parser::{Parser, Parsed};
 use super::Counter;
 use super::Reason;
 
@@ -71,38 +66,6 @@ fn checked_join_test() {
     )
 }
 
-/// Finds all "hrefs" in an HTML and run all analyses.
-fn tree_search<'a>(html: &'a Html) -> Vec<(Reason, &'a str)> {
-    lazy_static! {
-        static ref ANCHOR: Selector =
-            Selector::parse("a").expect("failed to parse statics selector");
-        static ref CANONICAL: Selector =
-            Selector::parse("link[rel=\"canonical\"]").expect("failed to parse statics selector");
-    }
-
-    let anchors = html
-        .select(&ANCHOR)
-        .filter_map(|element| element.value().attr("href"))
-        .map(|link| (Reason::Ahref, link));
-    let canonicals = html
-        .select(&CANONICAL)
-        .filter_map(|element| element.value().attr("href"))
-        .map(|link| (Reason::Canonical, link));
-
-    anchors.chain(canonicals).collect()
-}
-
-pub(crate) enum Hit {
-    Download {
-        content: Vec<u8>,
-        status_code: StatusCode,
-    },
-    Redirect {
-        location: String,
-        status_code: StatusCode,
-    },
-}
-
 #[derive(Debug)]
 pub(crate) enum Crawled {
     Success {
@@ -134,198 +97,71 @@ pub(crate) enum ReportType {
     Crawled(Crawled),
 }
 
-pub struct CrawlWorker<WF: WorkerBackendFactory> {
-    client: Client<HttpsConnector<HttpConnector>, Body>,
+pub struct CrawlWorker<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> {
+    downloader: D,
+    parser: P,
+    boundaries: B,
     task_counter: Arc<Counter>,
     profile: Arc<Profile>,
-    variables: Arc<SetVariables>,
-    analyzer: Analyzer,
-    boundaries: Boundaries,
     worker_backend_factory: Arc<Mutex<WF>>,
     origins: Arc<Origins>,
+    request_timeout: f64,
 }
 
-impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
+impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWorker<D, P, B, WF> {
     pub fn new(
+        downloader: D,
+        parser: P,
+        boundaries: B,
+        worker_backend_factory: Arc<Mutex<WF>>,
         task_counter: Arc<Counter>,
         profile: Arc<Profile>,
-        variables: Arc<SetVariables>,
-        directives: Arc<Directives>,
-        worker_backend_factory: Arc<Mutex<WF>>,
         origins: Arc<Origins>,
-    ) -> CrawlWorker<WF> {
-        let https = HttpsConnector::new();
-        let client = Client::builder()
-            .pool_idle_timeout(Some(std::time::Duration::from_secs_f64(
-                5. / variables
-                    .get_as_positive_f64(Variable::MaxHitsPerSec)
-                    .expect("bad val"),
-            )))
-            .pool_max_idle_per_host(1) // very stringent, but useful.
-            .build::<_, hyper::Body>(https);
-
+        request_timeout: f64,
+    ) -> CrawlWorker<D, P, B, WF> {
         CrawlWorker {
-            client,
+            downloader,
             task_counter,
             profile,
-            variables,
-            analyzer: directives.analyzer(),
-            boundaries: directives.boundaries(),
+            parser,
+            boundaries,
             worker_backend_factory,
             origins,
-        }
-    }
-
-    pub(crate) async fn download<'a>(&'a self, page_url: &'a Url) -> Result<Hit, crate::Error> {
-        // Make the request.
-        let uri: hyper::Uri = page_url.as_str().parse()?; // uh! patchy
-        let builder = Request::get(uri);
-        let request = builder
-            .header(
-                "User-Agent",
-                self.variables
-                    .get_as_str(Variable::UserAgent)
-                    .expect("bad val"),
-            )
-            .header("Accept-Encoding", "gzip, deflate")
-            // .header("Connection", "Keep-Alive")
-            // .header("Keep-Alive", format!("timeout={}, max=100", 10))
-            .body(Body::from(""))
-            .expect("unreachable");
-
-        // Send the request:
-        let response = self.client.request(request).await?;
-
-        // Get status and filter redirects:
-        let status_code = response.status();
-        let headers = response.headers();
-
-        if status_code.is_redirection() {
-            let location_value = headers
-                .get(http::header::LOCATION)
-                .cloned()
-                .ok_or(crate::Error::NoLocationOnRedirect)?;
-
-            // Force UTF-8, dammit!
-            let location = String::from_utf8_lossy(location_value.as_bytes()).into_owned();
-
-            Ok(Hit::Redirect {
-                location,
-                status_code,
-            })
-        } else {
-            // Get encoding:
-            // Force UTF-8, dammit!
-            let encoding_value = headers.get(http::header::CONTENT_ENCODING);
-            let encoding = encoding_value
-                .map(|value| String::from_utf8_lossy(value.as_bytes()).into_owned())
-                .unwrap_or_else(|| "identity".to_owned());
-
-            // Download contents:
-            let mut body = response.into_body();
-            let mut content = vec![];
-
-            while let Some(chunk) = body.next().await {
-                let chunk = chunk?;
-                let max_body_size = self
-                    .variables
-                    .get_as_u64(Variable::MaxBodySize)
-                    .expect("bad val") as usize;
-                if content.len() + chunk.len() > max_body_size {
-                    log::debug!("at {}: Got very big body. Truncating...", page_url);
-
-                    let truncated = &chunk[..max_body_size - content.len()];
-                    self.task_counter.add_to_download_count(truncated.len());
-                    content.extend(truncated);
-
-                    break;
-                }
-
-                self.task_counter.add_to_download_count(chunk.len());
-                content.extend(chunk);
-            }
-
-            // Decode contents if necessary:
-            content = match encoding.as_str() {
-                "identity" => content,
-                "gzip" => {
-                    let mut decoded = Vec::new();
-                    GzipDecoder::new(&content[..])?.read_to_end(&mut decoded)?;
-                    decoded
-                }
-                "deflate" => {
-                    let mut decoded = Vec::new();
-                    DeflateDecoder::new(&content[..]).read_to_end(&mut decoded)?;
-                    decoded
-                }
-                _ => return Err(crate::Error::UnknownContentEncoding(encoding)),
-            };
-
-            Ok(Hit::Download {
-                content,
-                status_code,
-            })
+            request_timeout,
         }
     }
 
     async fn crawl(&self, page_url: &Url) -> Crawled {
-        // Now, this is the active part until the end:
-        // NOTE TO SELF: DO NOT RETURN EARLY IN THIS FUNCTION.
-        self.task_counter.inc_active();
-
         // Now, download, but be quick.
-        let crawled = match time::timeout(
-            Duration::from_secs_f64(
-                self.variables
-                    .get_as_positive_f64(Variable::RequestTimeout)
-                    .expect("bad val"),
-            ),
-            self.download(page_url),
-        )
-        .await
-        {
-            Ok(Ok(Hit::Download {
+        let crawl = time::timeout(
+            Duration::from_secs_f64(self.request_timeout),
+            self.downloader.download(page_url),
+        );
+
+        let crawled = match crawl.await {
+            Ok(Ok(Downloaded::Page {
                 content,
                 status_code,
-            })) if status_code.is_success() => {
-                // Search HTML:
-                let html = Html::parse_document(&String::from_utf8_lossy(&content));
-                let links = tree_search(&html);
-                log::debug!("found: {:?}", links);
-
-                // Now, parse and see what stays in and what goes away:
-                let filtered_links = if self.boundaries.is_frontier(page_url) {
-                    vec![]
-                } else {
-                    let mut raw_links = links
-                        .into_iter()
-                        .filter_map(|(reason, raw)| match checked_join(page_url, raw) {
-                            Ok(url) => Some((reason, self.boundaries.filter_query_params(url))),
-                            Err(err) => {
-                                log::debug!("at {}: {}", page_url, err);
-                                None
-                            }
-                        })
-                        .filter(|(_reason, url)| self.boundaries.is_allowed(url))
-                        .map(|(reason, url)| (reason, self.boundaries.filter_query_params(url)))
-                        .collect::<Vec<_>>();
-                    // Only *one* representative for each (reason, link) pair. This may ease the load
-                    // on the database and avoid dumb stuff in general.
-                    raw_links.sort_unstable();
-                    raw_links.dedup();
-                    raw_links
-                };
-
-                let analyses = self.analyzer.analyze(page_url, &html);
-
-                Crawled::Success {
-                    status_code,
-                    links: filtered_links,
-                    analyses,
+            })) => {
+                match self.parser.parse(page_url, &content) {
+                    Parsed::Accepted { links, analyses} => {
+                        Crawled::Success {
+                            status_code,
+                            links: self.boundaries.clean_links(page_url, &links),
+                            analyses,
+                        }
+                    },
+                    Parsed::NotAccepted => {
+                        Crawled::Success {
+                            status_code,
+                            links: vec![],
+                            analyses: vec![],
+                        }
+                    }
                 }
             }
-            Ok(Ok(Hit::Download { status_code, .. })) => Crawled::BadStatus { status_code },
-            Ok(Ok(Hit::Redirect {
+            Ok(Ok(Downloaded::BadStatus { status_code, .. })) => Crawled::BadStatus { status_code },
+            Ok(Ok(Downloaded::Redirect {
                 location,
                 status_code,
             })) => Crawled::Redirect {
@@ -335,9 +171,6 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
             Ok(Err(error)) => Crawled::Error(error),
             Err(_) => Crawled::TimedOut,
         };
-
-        // End of the active part:
-        self.task_counter.dec_active();
 
         crawled
     }
@@ -388,7 +221,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
                                 depth + 1,
                                 vec![(
                                     Reason::Redirect,
-                                    self.boundaries.filter_query_params(location),
+                                    self.boundaries.clean_query_params(location),
                                 )],
                             )
                             .await
@@ -429,7 +262,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         depth: u16,
     ) -> Result<(), crate::Error> {
         // Get origin:
-        let origin = self.origins.get_origin_for_url(&self, &page_url).await;
+        let origin = self.origins.get_origin_for_url(&self.downloader, &page_url).await;
 
         // Do not do anything if disallowed:
         if !origin.allows(page_url) {
@@ -439,7 +272,12 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         // First, wait your turn!
         origin.block().await;
 
+        // Then, you crawl:
+        self.task_counter.inc_active();
         let crawled = self.crawl(page_url).await;
+        self.task_counter.dec_active();
+
+        // Finally, you store!
         self.store(worker_backend, page_url, depth, crawled).await?;
 
         Ok(())
@@ -505,7 +343,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
     }
 
     pub async fn test_url(self, url: Url) -> TestRunReport {
-        let actual_url = self.boundaries.filter_query_params(url);
+        let actual_url = self.boundaries.clean_query_params(url);
 
         if !self.boundaries.is_allowed(&actual_url) {
             return TestRunReport {
@@ -515,7 +353,7 @@ impl<WF: WorkerBackendFactory> CrawlWorker<WF> {
         }
 
         // Get origin:
-        let origin = self.origins.get_origin_for_url(&self, &actual_url).await;
+        let origin = self.origins.get_origin_for_url(&self.downloader, &actual_url).await;
 
         // Do not do anything if disallowed:
         if !origin.allows(&actual_url) {

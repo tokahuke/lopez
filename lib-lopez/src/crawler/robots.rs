@@ -4,8 +4,7 @@
 use robots_txt::Robots;
 use url::{Position, Url};
 
-use crate::backend::WorkerBackendFactory;
-use crate::crawler::{CrawlWorker, Hit};
+use super::downloader::{Downloader, Downloaded};
 
 pub struct RobotExclusion {
     disallow: Vec<Match>,
@@ -90,7 +89,7 @@ impl Match {
 fn robots_test() {
     let robots_txt = r#"
 # See http://www.robotstxt.org/wc/norobots.html for documentation on how to use the robots.txt file
-#
+#worker
 # To ban all spiders from the entire site uncomment the next two lines:
 # User-Agent: *
 # Disallow: /
@@ -121,27 +120,21 @@ Sitemap: https://querobolsa.com.br/sitemap_index.xml
 }
 
 /// Tries to get robots.txt for *exactly* that `base_url`.
-async fn do_get_robots<WF>(
-    worker: &CrawlWorker<WF>,
-    base_url: &Url,
-) -> Result<Option<String>, crate::Error>
-where
-    WF: WorkerBackendFactory,
-{
+async fn do_get_robots<D: Downloader>(downloader: &D, base_url: &Url) -> Result<Option<String>, crate::Error> {
     // Make the request.
     let mut robots_url: Url = base_url.join("/robots.txt")?;
 
     // Now, try and follow redirects, but up to a point:
     for _ in 0..5 {
-        match worker.download(&robots_url).await? {
-            Hit::Redirect { location, .. } => robots_url = location.parse::<Url>()?,
-            Hit::Download {
+        match downloader.download(&robots_url).await? {
+            Downloaded::Redirect { location, .. } => robots_url = location.parse::<Url>()?,
+            Downloaded::Page {
                 content,
                 status_code,
             } if status_code.is_success() => {
                 return Ok(Some(String::from_utf8_lossy(&content).into_owned()))
             }
-            Hit::Download { .. } => return Ok(None),
+            _ => return Ok(None),
         }
     }
 
@@ -150,19 +143,13 @@ where
 }
 
 /// Tries to get robots.txt for that `base_url`, going up a domain recursively if not found.
-pub async fn get_robots<WF>(
-    worker: &CrawlWorker<WF>,
-    mut base_url: Url,
-) -> Result<Option<String>, crate::Error>
-where
-    WF: WorkerBackendFactory,
-{
+pub async fn get_robots<D: Downloader>(downloader: &D, mut base_url: Url) -> Result<Option<String>, crate::Error> {
     let mut robots = None;
 
     // If not successful, try one level up:
     while robots.is_none() {
         // If successful, return. You are done.
-        if let Some(resolved) = do_get_robots(worker, &base_url).await? {
+        if let Some(resolved) = do_get_robots(downloader, &base_url).await? {
             robots = Some(resolved);
         } else if let Some(domain) = base_url.domain().map(str::to_owned) {
             // If not, move up!

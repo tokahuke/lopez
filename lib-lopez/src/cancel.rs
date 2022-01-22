@@ -2,7 +2,7 @@ use futures::channel::oneshot;
 use futures::future::select;
 use futures::prelude::*;
 use std::fmt::Debug;
-use tokio::runtime::Runtime;
+use tokio::runtime;
 use tokio::task::LocalSet;
 
 use crate::panic::log_panics;
@@ -25,7 +25,9 @@ where
         .name(name.clone())
         .spawn(move || {
             log_panics(); // can only be called once per thread!
-            let mut runtime = Runtime::new().expect("can always init runtime");
+            let mut runtime = runtime::Builder::new_current_thread()
+                .build()
+                .expect("can build runtime");
 
             LocalSet::new().block_on(&mut runtime, async move {
                 // Guard to log *all* errors:

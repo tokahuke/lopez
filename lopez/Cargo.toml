@@ -2,7 +2,7 @@
 name = "lopez"
 version = "0.6.1"
 authors = ["Pedro Bittencorut Arruda <pedrobittencourt3@protonmail.ch>"]
-edition = "2018"
+edition = "2021"
 homepage = "https://silentpuma.com/lopez"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,9 +12,9 @@ lib-lopez = { path = "../lib-lopez" }
 postgres-lopez = { path = "../postgres-lopez" }
 
 # Still nees these two for macro expansion (irrgh! will fin a way to get rid of these).
-tokio = { version = "0.2.22", features = ["macros", "rt-core", "rt-util"] }
-structopt = "0.3.18"
-serde_json = "1.0.64"
+tokio = { version = "1.15.0", features = ["macros"] }
+structopt = "0.3.26"
+serde_json = "1.0.75"
 
 [target.'cfg(not(target_env = "musl"))'.dependencies]
 jemallocator = "0.3.2"

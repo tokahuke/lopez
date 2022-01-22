@@ -1,32 +1,29 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
-use tokio::time::{self, Delay, Duration};
+use tokio::time::{self, Duration, Interval};
 use url::{Origin as UrlOrigin, Url};
 
-use crate::backend::WorkerBackendFactory;
-use crate::crawler::CrawlWorker;
-use crate::robots::{get_robots, RobotExclusion};
+use super::robots::{get_robots, RobotExclusion};
+use super::downloader::{Downloader};
 
 pub struct Origin {
     // _base_url: Option<Url>,
     exclusion: Option<RobotExclusion>,
     crawl_delay: Duration,
-    block_until: Mutex<Delay>,
+    block_until: Mutex<Interval>,
 }
 
 impl Origin {
-    async fn load<WF>(
-        worker: &CrawlWorker<WF>,
+    async fn load<D: Downloader>(
+        downloader: &D,
         url_origin: UrlOrigin,
         default_requests_per_sec: f64,
     ) -> Origin
-    where
-        WF: WorkerBackendFactory,
     {
         let base_url = url_origin.ascii_serialization().parse::<Url>().ok();
         let exclusion = if let Some(base_url) = base_url {
-            get_robots(worker, base_url)
+            get_robots(downloader, base_url)
                 .await
                 .ok()
                 .flatten()
@@ -44,7 +41,7 @@ impl Origin {
                 .unwrap_or(0.),
         );
         let crawl_delay = Duration::from_millis((crawl_delay_secs * 1e3) as u64);
-        let block_until = Mutex::new(time::delay_for(crawl_delay));
+        let block_until = Mutex::new(time::interval(crawl_delay));
 
         Origin {
             // _base_url: base_url,
@@ -57,8 +54,7 @@ impl Origin {
     pub async fn block(&self) {
         // If you block, it is because someone else is waiting, and so should you.
         let mut delay = self.block_until.lock().await;
-        (&mut *delay).await;
-        *delay = time::delay_until(time::Instant::now() + self.crawl_delay);
+        delay.tick().await;
     }
 
     /// Warning: this assumes that `url` is of the same origin.
@@ -87,10 +83,7 @@ impl Origins {
         }
     }
 
-    pub async fn get_origin_for_url<WF>(&self, worker: &CrawlWorker<WF>, url: &Url) -> Arc<Origin>
-    where
-        WF: WorkerBackendFactory,
-    {
+    pub async fn get_origin_for_url<D: Downloader>(&self, downloader: &D, url: &Url) -> Arc<Origin> {
         let url_origin = url.origin();
         let origins = &self.origins[crate::hash(&url_origin) as usize % SEGMENT_SIZE];
 
@@ -106,7 +99,7 @@ impl Origins {
             // Recheck condition:
             if !write_guard.contains_key(&url_origin) {
                 let origin =
-                    Origin::load(worker, url_origin.clone(), self.default_requests_per_sec).await;
+                    Origin::load(downloader, url_origin.clone(), self.default_requests_per_sec).await;
 
                 write_guard.insert(url_origin.clone(), Arc::new(origin));
             }

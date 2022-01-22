@@ -8,10 +8,8 @@ mod directives;
 mod env;
 mod error;
 mod hash;
-mod origins;
 mod page_rank;
 mod panic;
-mod robots;
 #[macro_use]
 mod cli;
 mod logger;
@@ -63,7 +61,7 @@ macro_rules! main {
             );
         }
 
-        #[tokio::main(basic_scheduler)]
+        #[tokio::main(flavor = "current_thread")]
         pub async fn main() {
             use $crate::ansi_term::Color::{Green, Red};
 
@@ -152,10 +150,11 @@ macro_rules! main {
                                     }
                                 }
                                 Ok(directives) => {
-                                    let directives = Arc::new(directives);
+                                    let directives = directives;
+                                    let configuration = $crate::crawler::DirectivesConfiguration::new(directives);
 
                                     // Create report:
-                                    let report = $crate::test_url(Arc::new(Profile::default()), directives, url)
+                                    let report = $crate::test_url(Arc::new(Profile::default()), configuration, url)
                                         .await;
 
                                     // Show report:
@@ -181,13 +180,14 @@ macro_rules! main {
                     $crate::init_logger(cli.verbose);
 
                     // Open directives:
-                    let directives = Arc::new(Directives::load(source, cli.import_path).map_err(|err| Some(err.into()))?);
+                    let directives = Directives::load(source, cli.import_path).map_err(|err| Some(err.into()))?;
+                    let configuration = $crate::crawler::DirectivesConfiguration::new(directives);
 
                     // Create backend:
                     let backend = <$backend_ty>::init(config, &wave_name).await.map_err(|err| Some(err.into()))?;
 
                     // Do the thing!
-                    $crate::start(Arc::new(profile), directives, backend).await?;
+                    $crate::start(Arc::new(profile), configuration, backend).await?;
 
                     Ok(Some("crawl complete".to_owned()))
                 }

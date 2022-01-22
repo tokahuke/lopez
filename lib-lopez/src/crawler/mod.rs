@@ -1,10 +1,15 @@
+mod boundaries;
 mod counter;
+mod downloader;
+mod parser;
 mod reason;
 mod worker;
+mod origins;
+mod robots;
 
 pub use counter::Counter;
 pub use reason::Reason;
-pub(crate) use worker::{CrawlWorker, Crawled, Hit, ReportType, TestRunReport};
+pub(crate) use worker::{CrawlWorker, Crawled, ReportType, TestRunReport};
 
 use futures::prelude::*;
 use std::sync::Arc;
@@ -14,29 +19,116 @@ use url::Url;
 
 use crate::backend::{Backend, MasterBackend, PageRanker};
 use crate::cli::Profile;
-use crate::directives::{Directives, Variable};
-use crate::origins::Origins;
+use crate::directives::Type;
+use crate::directives::Variable;
 
+use self::origins::Origins;
+use self::boundaries::Boundaries;
 use self::counter::log_stats;
+use self::downloader::{Downloader, SimpleDownloader};
+use self::parser::Parser;
+
+pub trait Configuration {
+    type Downloader: Downloader;
+    type Parser: Parser;
+    type Boundaries: Boundaries;
+
+    fn downloader(&self) -> Self::Downloader;
+    fn parser(&self) -> Self::Parser;
+    fn boundaries(&self) -> Self::Boundaries;
+    fn seeds(&self) -> Vec<Url>;
+    fn analyzes(&self) -> Vec<(String, Type)>;
+    fn max_hits_per_sec(&self) -> f64;
+    fn quota(&self) -> usize;
+    fn request_timeout(&self) -> f64;
+    fn max_depth(&self) -> i16;
+    fn enable_page_rank(&self) -> bool;
+}
+
+pub struct DirectivesConfiguration {
+    directives: crate::Directives,
+    variables: crate::directives::SetVariables,
+}
+
+impl DirectivesConfiguration {
+    pub fn new(directives: crate::Directives) -> DirectivesConfiguration {
+        DirectivesConfiguration {
+            variables: directives.set_variables(),
+            directives,
+        }
+    }
+}
+
+impl Configuration for DirectivesConfiguration {
+    type Downloader = SimpleDownloader;
+    type Parser = parser::HtmlParser;
+    type Boundaries = boundaries::DirectiveBoundaries;
+
+    fn downloader(&self) -> SimpleDownloader {
+        downloader::SimpleDownloader::new(
+            self.variables.get_as_str(Variable::UserAgent).expect("bad val").to_owned(),
+            self.variables.get_as_u64(Variable::MaxBodySize).expect("bad val") as usize,
+        )
+    }
+
+    fn parser(&self) -> parser::HtmlParser {
+        parser::HtmlParser::new(self.directives.analyzer())
+    }
+
+    fn boundaries(&self) -> boundaries::DirectiveBoundaries {
+        boundaries::DirectiveBoundaries::new(self.directives.boundaries())
+    }
+
+    fn seeds(&self) -> Vec<Url> {
+        self.directives.seeds()
+    }
+
+    fn analyzes(&self) -> Vec<(String, Type)> {
+        self.directives.rules()
+    }
+
+    fn max_hits_per_sec(&self) -> f64 {
+        self.variables
+            .get_as_positive_f64(Variable::MaxHitsPerSec)
+            .expect("bad val")
+    }
+
+    fn quota(&self) -> usize {
+        self.variables.get_as_u64(Variable::Quota).expect("bad val") as usize
+    }
+
+    fn request_timeout(&self) -> f64 {
+        self.variables
+            .get_as_positive_f64(Variable::RequestTimeout)
+            .expect("bad val")
+    }
+
+    fn max_depth(&self) -> i16 {
+        self.variables
+            .get_as_u64(Variable::MaxDepth)
+            .expect("bad val") as i16
+    }
+
+    fn enable_page_rank(&self) -> bool {
+        self.variables
+            .get_as_bool(Variable::EnablePageRank)
+            .expect("bad val")
+    }
+}
 
 /// Does the crawling.
-pub async fn start<B: Backend>(
+pub async fn start<C: Configuration, B: Backend>(
     profile: Arc<Profile>,
-    directives: Arc<Directives>,
+    configuration: C,
     mut backend: B,
 ) -> Result<(), crate::Error> {
     // Set panics to be logged:
     crate::panic::log_panics();
 
-    // Get the set-variables definitions:
-    let variables = Arc::new(directives.set_variables());
+    let configuration = Arc::new(configuration);
 
     // Set global (transient) information on origins:
-    let origins = Arc::new(Origins::new(
-        variables
-            .get_as_positive_f64(Variable::MaxHitsPerSec)
-            .expect("bad val"),
-    ));
+    let origins = Arc::new(Origins::new(configuration.max_hits_per_sec()));
 
     // Load data model:
     let mut master_model = backend.build_master().await.map_err(|err| err.into())?;
@@ -52,7 +144,7 @@ pub async fn start<B: Backend>(
         .count_crawled()
         .await
         .map_err(|err| err.into())?;
-    let crawl_quota = variables.get_as_u64(Variable::Quota).expect("bad val") as usize;
+    let crawl_quota = configuration.quota();
     let max_quota = profile.max_quota.unwrap_or(std::usize::MAX);
     let effective_quota = usize::min(max_quota, crawl_quota);
     // Whether enough juice was given for the crawl to get to the end:
@@ -68,24 +160,25 @@ pub async fn start<B: Backend>(
     ));
 
     let crawl_profile = profile.clone();
-    let crawl_directives = directives.clone();
-    let crawl_variables = variables.clone();
+    let crawl_configuration = configuration.clone();
     let (mut senders, handles): (Vec<_>, Vec<_>) = (0..profile.workers)
         .map(move |worker_id| {
             CrawlWorker::new(
+                crawl_configuration.downloader(),
+                crawl_configuration.parser(),
+                crawl_configuration.boundaries(),
+                worker_model_factory.clone(),
                 crawl_counter.clone(),
                 crawl_profile.clone(),
-                crawl_variables.clone(),
-                crawl_directives.clone(),
-                worker_model_factory.clone(),
                 origins.clone(),
+                crawl_configuration.request_timeout(),
             )
             .run(worker_id)
         })
         .unzip();
 
     // Ensure that the search was started:
-    let seeds = directives.seeds();
+    let seeds = configuration.seeds();
     log::info!(
         "Seeding:\n    {}",
         seeds
@@ -95,13 +188,13 @@ pub async fn start<B: Backend>(
             .join("\n    ")
     );
     master_model
-        .ensure_seeded(&directives.seeds())
+        .ensure_seeded(&configuration.seeds())
         .await
         .map_err(|err| err.into())?;
 
     // Ensure that all analysis names exist:
     master_model
-        .create_analyses(&directives.rules())
+        .create_analyses(&configuration.analyzes())
         .await
         .map_err(|err| err.into())?;
 
@@ -120,10 +213,7 @@ pub async fn start<B: Backend>(
 
     'master: while !is_interrupted {
         match master_model
-            .fetch(
-                profile.batch_size as i64,
-                variables.get_as_u64(Variable::MaxDepth)? as i16,
-            )
+            .fetch(profile.batch_size as i64, configuration.max_depth())
             .await
         {
             Err(error) => {
@@ -148,7 +238,7 @@ pub async fn start<B: Backend>(
                     }
 
                     // This mitigates a spin lock here.
-                    time::delay_for(Duration::from_secs(1)).await;
+                    time::sleep(Duration::from_secs(1)).await;
                     continue 'master;
                 } else {
                     // "Cancel the Apocalypse..."
@@ -195,10 +285,7 @@ pub async fn start<B: Backend>(
         log::info!("crawl done");
 
         // Now, do page rank, if enabled:
-        if variables
-            .get_as_bool(Variable::EnablePageRank)
-            .expect("bad val")
-        {
+        if configuration.enable_page_rank() {
             page_rank_for_wave_id(&mut backend, wave_id).await?
         }
 
@@ -227,20 +314,13 @@ pub async fn page_rank<B: Backend>(mut backend: B) -> Result<(), crate::Error> {
 }
 
 /// Tests a URL and says what is happening.
-pub async fn test_url(
+pub async fn test_url<C: Configuration>(
     profile: Arc<Profile>,
-    directives: Arc<Directives>,
+    configuration: C,
     url: Url,
 ) -> TestRunReport {
-    // Get the set-variables definitions:
-    let variables = Arc::new(directives.set_variables());
-
     // Set global (transient) information on origins:
-    let origins = Arc::new(Origins::new(
-        variables
-            .get_as_positive_f64(Variable::MaxHitsPerSec)
-            .expect("bad val"),
-    ));
+    let origins = Arc::new(Origins::new(configuration.max_hits_per_sec()));
 
     // Load dummy data model:
     let mut backend = crate::backend::DummyBackend::default();
@@ -256,12 +336,14 @@ pub async fn test_url(
     let counter = Arc::new(Counter::default());
 
     CrawlWorker::new(
+        configuration.downloader(),
+        configuration.parser(),
+        configuration.boundaries(),
+        worker_model_factory,
         counter,
         profile,
-        variables,
-        directives,
-        worker_model_factory,
         origins,
+        configuration.request_timeout(),
     )
     .test_url(url)
     .await
