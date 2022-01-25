@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::{env, fs, io};
 
 const LOPEZ_BIN: &[u8] = include_bytes!("../../target/x86_64-unknown-linux-musl/release/lopez");
-const LOPEZ_LIB: Dir = include_dir::include_dir!("../std-lopez");
+const LOPEZ_LIB: Dir = include_dir::include_dir!("std-lopez");
 
 const LIB_PATH: &str = "/usr/share/lopez/lib";
 const BIN_PATH: &str = "/usr/local/bin/lopez";
@@ -20,7 +20,7 @@ fn install() -> io::Result<()> {
 
     println!("Creating folder structure");
 
-    for entry in LOPEZ_LIB.find("**/*").expect("valid pattern") {
+    for entry in LOPEZ_LIB.entries() {
         match entry {
             DirEntry::Dir(dir) => {
                 println!("... creating folder {:?}", dir.path());
@@ -36,7 +36,7 @@ fn install() -> io::Result<()> {
 
     println!("Writing files");
 
-    for entry in LOPEZ_LIB.find("**/*.lcd").expect("valid pattern") {
+    for entry in LOPEZ_LIB.entries() {
         match entry {
             DirEntry::File(file) => {
                 println!("... writing file {:?}", file.path());
@@ -76,3 +76,4 @@ fn main() -> io::Result<()> {
         uninstall()
     }
 }
+

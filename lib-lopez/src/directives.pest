@@ -1,0 +1,80 @@
+
+main = { SOI ~ items ~ EOI }
+
+WHITESPACE = _{ " " | "\n" | "\t" | "\r" }
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)* ~ ("\n" | EOI) }
+
+identifier = @{ (!("\\" | "/" | ":" | ";" | "." | "(" | ")" | "[" | "]" | "{" | "}" | "\'" | "\""
+    | WHITESPACE) ~ ANY)+ }
+escaped_string = @{ "\"" ~ (!"\"" ~ ANY | "\\")* ~ "\""}
+css_selector_before_cur = @{ (!"{" ~ ANY)* }
+css_selector_before_par = @{ (!"(" ~ ANY)* }
+double = @{
+    ("+" | "-")? ~ ('1'..'9'* ~ "." ~ ('0'..'9')* | ('0'..'9')+) ~ ("e" ~ ("+" | "-")? ~ ('0'..'9')+)?
+}
+integer = @{ ("+" | "-")? ~ ('0'..'9')+ }
+
+extractor = { "name" | "text" | "html" | "inner-html" | "attrs" | "classes" | "id"
+    | "attr" ~ escaped_string
+    | "parent" ~ "(" ~ extractor_expression ~")" 
+    | "children" ~ "(" ~ extractor_expression ~")" 
+    | "select-any" ~ "(" ~ extractor_expression ~ css_selector_before_par ~ ")" 
+    | "select-all" ~ "(" ~ extractor_expression ~ css_selector_before_par ~ ")" 
+}
+
+transformer = { "is-null" | "is-not-null" | "hash" | "not" | "as-number" | "greater-than"
+    | "sort" | "as-string" | "pretty" | "lesser-than" | "greater-or-equal" | "lesser-or-equal"
+    | "flatten"
+    | "equals" ~ escaped_string
+    | "equals" ~ double
+    | "between" ~ double ~ "and" ~ double
+    | "in" ~ "[" ~ (escaped_string ~ ("," ~ escaped_string)*)? ~ "]"
+    | "in" ~ "[" ~ (double ~ ("," ~ double)*)? ~ "]"
+    | "get" ~ integer
+    | "get" ~ escaped_string
+    | "capture" ~ escaped_string
+    | "all-captures" ~ escaped_string
+    | "matches" ~ escaped_string
+    | "replace" ~ escaped_string ~ "with" ~ escaped_string
+    | "each" ~ "(" ~ transformer_expression ~ ")"
+    | "filter" ~ "(" ~ transformer_expression ~ ")"
+    | "any" ~ "(" ~ transformer_expression ~ ")"
+    | "all" ~ "(" ~ transformer_expression ~ ")"
+}
+
+transformer_expression = { transformer* }
+extractor_expression = { extractor ~ transformer_expression }
+exploding_extractor_expression = { extractor ~ transformer_expression ~ ("!explode")? }
+
+aggregator = { "count" | "count" ~ "(" ~ exploding_extractor_expression ~ ")" 
+    | "first" ~ "(" ~ exploding_extractor_expression ~ ")" 
+    | "collect" ~ "(" ~ exploding_extractor_expression ~ ")" 
+    | "distinct" ~ "(" ~ exploding_extractor_expression ~ ")" 
+    | "sum" ~ "(" ~ exploding_extractor_expression ~ ")" 
+    | "group" ~ "(" ~ exploding_extractor_expression ~ "," ~ aggregator_expression ~ ")" 
+}
+
+aggregator_expression = { aggregator ~ transformer_expression }
+
+rule = { identifier ~ ":" ~ aggregator_expression }
+rule_set = {
+    "select" ~ ("in" ~ escaped_string)? ~ css_selector_before_cur ~ "{" ~ (rule ~ (";" ~ rule)*)? ~ "}"
+}
+
+import = { "import" ~ escaped_string }
+
+boundary = { "allow" ~ escaped_string
+    | "disallow" ~ escaped_string
+    | "frontier" ~ escaped_string
+    | "use" ~ "param" ~ escaped_string
+    | "use" ~ "param" ~ "*"
+    | "ignore" ~ "param" ~ escaped_string
+}
+
+seed = { "seed" ~ escaped_string }
+
+literal = { escaped_string | "true" | "false" | double | "[" | (literal ~ ("," ~ literal)*)? ~ "]" }
+set_variable = {"set" ~ identifier ~ "=" ~ literal }
+
+item = { "import" ~ ";" | boundary ~ ";" | seed ~ ";" | set_variable ~ ";" | rule_set }
+items = { item* }

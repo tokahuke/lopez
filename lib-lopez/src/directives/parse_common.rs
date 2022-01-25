@@ -15,7 +15,7 @@ pub fn eof(i: &str) -> IResult<&str, ()> {
     if i.is_empty() {
         Ok((i, ()))
     } else {
-        Err(nom::Err::Error((i, nom::error::ErrorKind::IsA)))
+        Err(nom::Err::Error(nom::error::Error { input: i, code: nom::error::ErrorKind::IsA }))
     }
 }
 
@@ -46,15 +46,15 @@ fn whitespace_test() {
     assert_eq!(whitespace("").unwrap(), ("", ())); // is this behavior wise?
 }
 
-pub fn trailing_whitespace<'a, F, T>(f: F) -> impl Fn(&'a str) -> IResult<&'a str, T>
+pub fn trailing_whitespace<'a, F, T>(f: F) -> impl FnMut(&'a str) -> IResult<&'a str, T>
 where
-    F: Fn(&'a str) -> IResult<&'a str, T>,
+    F: FnMut(&'a str) -> IResult<&'a str, T>,
 {
     map(tuple((f, whitespace)), |(t, _)| t)
 }
 
 #[allow(clippy::needless_lifetimes)] // not that needless...
-pub fn tag_whitespace<'a>(tag_val: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, &'a str> {
+pub fn tag_whitespace<'a>(tag_val: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
     trailing_whitespace(tag(tag_val))
 }
 

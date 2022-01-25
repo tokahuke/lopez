@@ -14,10 +14,11 @@ mod panic;
 mod cli;
 mod logger;
 pub mod pretty_print;
+mod directives2;
 
 pub use ansi_term;
 pub use cli::Profile;
-pub use crawler::{page_rank, start, test_url};
+pub use crawler::{page_rank, start, test_url, DirectivesConfiguration};
 pub use directives::Directives;
 pub use error::Error;
 pub use hash::hash;
@@ -151,7 +152,7 @@ macro_rules! main {
                                 }
                                 Ok(directives) => {
                                     let directives = directives;
-                                    let configuration = $crate::crawler::DirectivesConfiguration::new(directives);
+                                    let configuration = $crate::DirectivesConfiguration::new(directives);
 
                                     // Create report:
                                     let report = $crate::test_url(Arc::new(Profile::default()), configuration, url)
@@ -181,7 +182,7 @@ macro_rules! main {
 
                     // Open directives:
                     let directives = Directives::load(source, cli.import_path).map_err(|err| Some(err.into()))?;
-                    let configuration = $crate::crawler::DirectivesConfiguration::new(directives);
+                    let configuration = $crate::DirectivesConfiguration::new(directives);
 
                     // Create backend:
                     let backend = <$backend_ty>::init(config, &wave_name).await.map_err(|err| Some(err.into()))?;

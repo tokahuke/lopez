@@ -93,10 +93,10 @@ impl Boundaries for DirectiveBoundaries {
     }
 
     fn is_frontier(&self, url: &Url) -> bool {
-        self.is_frontier(url)
+        self.boundaries.is_frontier(url)
     }
 
     fn clean_query_params(&self, url: Url) -> Url {
-        self.clean_query_params(url)
+        self.boundaries.filter_query_params(url)
     }
 }

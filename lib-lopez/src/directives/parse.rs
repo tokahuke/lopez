@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::{is_not, tag},
     character::complete::digit1,
     combinator::{all_consuming, map, map_res, not, opt},
-    multi::{many0, separated_list},
+    multi::{many0, separated_list0},
     number::complete::double,
     sequence::{delimited, tuple},
     IResult,
@@ -33,9 +33,9 @@ fn identifier_test() {
     );
 }
 
-fn identified_value<'a, F, T>(f: F) -> impl Fn(&'a str) -> IResult<&'a str, (&'a str, T)>
+fn identified_value<'a, F, T>(f: F) -> impl FnMut(&'a str) -> IResult<&'a str, (&'a str, T)>
 where
-    F: Fn(&'a str) -> IResult<&'a str, T>,
+    F: FnMut(&'a str) -> IResult<&'a str, T>,
 {
     map(
         tuple((
@@ -56,10 +56,10 @@ fn identified_value_test() {
     );
 }
 
-fn block<'a, He, Va, H, V>(head: He, value: Va) -> impl Fn(&'a str) -> IResult<&'a str, (H, Vec<V>)>
+fn block<'a, He, Va, H, V>(head: He, value: Va) -> impl FnMut(&'a str) -> IResult<&'a str, (H, Vec<V>)>
 where
-    He: Fn(&'a str) -> IResult<&'a str, H>,
-    Va: Fn(&'a str) -> IResult<&'a str, V>,
+    He: FnMut(&'a str) -> IResult<&'a str, H>,
+    Va: FnMut(&'a str) -> IResult<&'a str, V>,
 {
     tuple((
         trailing_whitespace(head),
@@ -100,7 +100,7 @@ fn css_selector(
         }
 
         if idx == 0 {
-            Err(nom::Err::Error((i, nom::error::ErrorKind::IsA)))
+            Err(nom::Err::Error(nom::error::Error { input: i, code: nom::error::ErrorKind::IsA }))
         } else {
             Ok((
                 &i[idx..],
@@ -533,7 +533,7 @@ fn literal(i: &str) -> IResult<&str, Value> {
         map(
             tuple((
                 tag_whitespace("["),
-                separated_list(tag_whitespace(","), literal),
+                separated_list0(tag_whitespace(","), literal),
                 tag("]"),
             )),
             |(_, array, _)| Value::Array(array),

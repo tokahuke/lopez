@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::tag,
     character::complete::digit1,
     combinator::{map, opt},
-    multi::{many0, separated_list},
+    multi::{many0, separated_list0},
     number::complete::double,
     sequence::tuple,
     IResult,
@@ -91,7 +91,7 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
                 tuple((
                     tag_whitespace("in"),
                     tag_whitespace("["),
-                    separated_list(tag_whitespace(","), double),
+                    separated_list0(tag_whitespace(","), double),
                     tag("]"),
                 )),
                 |(_, _, list, _)| Ok(Transformer::In(list.into_boxed_slice())),
@@ -161,7 +161,7 @@ fn transformer(i: &str) -> IResult<&str, Result<Transformer, String>> {
                 tuple((
                     tag_whitespace("in"),
                     tag_whitespace("["),
-                    separated_list(tag_whitespace(","), escaped_string),
+                    separated_list0(tag_whitespace(","), escaped_string),
                     tag("]"),
                 )),
                 |(_, _, list, _)| {

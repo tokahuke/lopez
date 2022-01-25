@@ -45,3 +45,5 @@ cached = { version = "0.30.0", default-features = false }
 smallvec = "1.8.0"
 colored_json = "2.1.0"
 serde_regex = "1.1.0"
+pest = "2.1.3"
+pest_derive = "2.1.0"

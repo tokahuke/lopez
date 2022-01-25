@@ -27,6 +27,7 @@ fn tree_search(html: &Html) -> Vec<(Reason, String)> {
     anchors.chain(canonicals).collect()
 }
 
+#[allow(unused)]
 pub enum Parsed {
     /// This parser does not parse this content.
     NotAccepted,

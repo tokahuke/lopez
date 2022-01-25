@@ -10,7 +10,6 @@ use super::downloader::{Downloader};
 pub struct Origin {
     // _base_url: Option<Url>,
     exclusion: Option<RobotExclusion>,
-    crawl_delay: Duration,
     block_until: Mutex<Interval>,
 }
 
@@ -46,7 +45,6 @@ impl Origin {
         Origin {
             // _base_url: base_url,
             exclusion,
-            crawl_delay,
             block_until,
         }
     }

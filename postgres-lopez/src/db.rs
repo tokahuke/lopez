@@ -96,11 +96,10 @@ impl DbConfig {
 
     fn embedded_migrations() -> Vec<Box<dyn Migratable>> {
         // Build embedded migrations:
-        const MIGRATIONS: Dir = include_dir::include_dir!("migrations");
+        const MIGRATIONS: Dir = include_dir::include_dir!("postgres-lopez/migrations");
 
         let mut migration_names = MIGRATIONS
             .dirs()
-            .iter()
             .map(|migration_dir| migration_dir.path().to_owned())
             .collect::<Vec<_>>();
 
