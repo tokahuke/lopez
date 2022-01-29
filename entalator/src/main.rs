@@ -76,4 +76,3 @@ fn main() -> io::Result<()> {
         uninstall()
     }
 }
-

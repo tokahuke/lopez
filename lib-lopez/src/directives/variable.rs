@@ -57,11 +57,11 @@ impl Variable {
         })
     }
 
-    fn bad_value<T>(&self, literal: &Value) -> Result<T, crate::Error> {
-        Err(crate::Error::BadSetVariableValue(*self, literal.clone()))
+    fn bad_value<T>(&self, literal: &Value) -> Result<T, super::Error> {
+        Err(super::Error::BadSetVariableValue(*self, literal.clone()))
     }
 
-    fn retrieve_as_bool(&self, literal: Option<&Value>) -> Result<bool, crate::Error> {
+    fn retrieve_as_bool(&self, literal: Option<&Value>) -> Result<bool, super::Error> {
         match (self, literal) {
             (Variable::EnablePageRank, None) => Ok(true),
             (Variable::EnablePageRank, Some(Value::Bool(b))) => Ok(*b),
@@ -70,7 +70,7 @@ impl Variable {
         }
     }
 
-    fn retrieve_as_str<'a>(&self, literal: Option<&'a Value>) -> Result<&'a str, crate::Error> {
+    fn retrieve_as_str<'a>(&self, literal: Option<&'a Value>) -> Result<&'a str, super::Error> {
         match (self, literal) {
             (Variable::UserAgent, None) => Ok(crate::default_user_agent()),
             (Variable::UserAgent, Some(Value::String(user_agent))) => Ok(&*user_agent),
@@ -81,7 +81,7 @@ impl Variable {
 
     // TODO: when "or patterns" stabilize, refactor this code.
 
-    fn retrieve_as_positive_f64(&self, literal: Option<&Value>) -> Result<f64, crate::Error> {
+    fn retrieve_as_positive_f64(&self, literal: Option<&Value>) -> Result<f64, super::Error> {
         match (self, literal) {
             (Variable::MaxHitsPerSec, None) => Ok(2.5),
             (Variable::RequestTimeout, None) => Ok(60.0),
@@ -109,7 +109,7 @@ impl Variable {
         }
     }
 
-    fn retrieve_as_u64(&self, literal: Option<&Value>) -> Result<u64, crate::Error> {
+    fn retrieve_as_u64(&self, literal: Option<&Value>) -> Result<u64, super::Error> {
         match (self, literal) {
             (Variable::Quota, None) => Ok(1000),
             (Variable::MaxDepth, None) => Ok(7),
@@ -146,19 +146,19 @@ pub struct SetVariables {
 }
 
 impl SetVariables {
-    pub fn get_as_bool(&self, name: Variable) -> Result<bool, crate::Error> {
+    pub fn get_as_bool(&self, name: Variable) -> Result<bool, super::Error> {
         name.retrieve_as_bool(self.set_variables.get(&name))
     }
 
-    pub fn get_as_str(&self, name: Variable) -> Result<&str, crate::Error> {
+    pub fn get_as_str(&self, name: Variable) -> Result<&str, super::Error> {
         name.retrieve_as_str(self.set_variables.get(&name))
     }
 
-    pub fn get_as_positive_f64(&self, name: Variable) -> Result<f64, crate::Error> {
+    pub fn get_as_positive_f64(&self, name: Variable) -> Result<f64, super::Error> {
         name.retrieve_as_positive_f64(self.set_variables.get(&name))
     }
 
-    pub fn get_as_u64(&self, name: Variable) -> Result<u64, crate::Error> {
+    pub fn get_as_u64(&self, name: Variable) -> Result<u64, super::Error> {
         name.retrieve_as_u64(self.set_variables.get(&name))
     }
 }

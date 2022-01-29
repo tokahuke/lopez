@@ -4,8 +4,8 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::time::{self, Duration, Interval};
 use url::{Origin as UrlOrigin, Url};
 
+use super::downloader::Downloader;
 use super::robots::{get_robots, RobotExclusion};
-use super::downloader::{Downloader};
 
 pub struct Origin {
     // _base_url: Option<Url>,
@@ -18,8 +18,7 @@ impl Origin {
         downloader: &D,
         url_origin: UrlOrigin,
         default_requests_per_sec: f64,
-    ) -> Origin
-    {
+    ) -> Origin {
         let base_url = url_origin.ascii_serialization().parse::<Url>().ok();
         let exclusion = if let Some(base_url) = base_url {
             get_robots(downloader, base_url)
@@ -81,7 +80,11 @@ impl Origins {
         }
     }
 
-    pub async fn get_origin_for_url<D: Downloader>(&self, downloader: &D, url: &Url) -> Arc<Origin> {
+    pub async fn get_origin_for_url<D: Downloader>(
+        &self,
+        downloader: &D,
+        url: &Url,
+    ) -> Arc<Origin> {
         let url_origin = url.origin();
         let origins = &self.origins[crate::hash(&url_origin) as usize % SEGMENT_SIZE];
 
@@ -96,8 +99,12 @@ impl Origins {
 
             // Recheck condition:
             if !write_guard.contains_key(&url_origin) {
-                let origin =
-                    Origin::load(downloader, url_origin.clone(), self.default_requests_per_sec).await;
+                let origin = Origin::load(
+                    downloader,
+                    url_origin.clone(),
+                    self.default_requests_per_sec,
+                )
+                .await;
 
                 write_guard.insert(url_origin.clone(), Arc::new(origin));
             }

@@ -51,9 +51,9 @@ impl Counter {
         self.active_count.load(Ordering::Acquire)
     }
 
-    pub fn add_to_download_count(&self, amount: usize) {
-        self.download_count.fetch_add(amount, Ordering::Relaxed);
-    }
+    // pub fn add_to_download_count(&self, amount: usize) {
+    //     self.download_count.fetch_add(amount, Ordering::Relaxed);
+    // }
 
     pub fn n_downloaded(&self) -> usize {
         self.download_count.load(Ordering::Relaxed)

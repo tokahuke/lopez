@@ -4,7 +4,7 @@ import "seo";
 allow "^https://github\.com/tokahuke/lopez(:?/|$)"; // this is a regular expression
 
 // But don't let it browse every tiny commit in history:
-disallow "/([a-f0-9]{40})"; // commit hashes in the URL
+disallow "^https://github\.com/tokahuke/lopez/(:?blob|raw|commits?|blame|tree|releases|compare)/";
 
 // Start from the repo homepage:
 seed "https://github.com/tokahuke/lopez";

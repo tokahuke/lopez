@@ -15,7 +15,10 @@ pub fn eof(i: &str) -> IResult<&str, ()> {
     if i.is_empty() {
         Ok((i, ()))
     } else {
-        Err(nom::Err::Error(nom::error::Error { input: i, code: nom::error::ErrorKind::IsA }))
+        Err(nom::Err::Error(nom::error::Error {
+            input: i,
+            code: nom::error::ErrorKind::IsA,
+        }))
     }
 }
 

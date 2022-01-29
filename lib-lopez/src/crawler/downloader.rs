@@ -3,6 +3,7 @@ use futures::StreamExt;
 use http::StatusCode;
 use hyper::body::HttpBody;
 use hyper::{client::HttpConnector, Body, Client, Request};
+use hyper_rustls::HttpsConnector;
 use libflate::deflate::Decoder as DeflateDecoder;
 use libflate::gzip::Decoder as GzipDecoder;
 use std::io::Read;
@@ -31,14 +32,20 @@ pub trait Downloader: 'static + Send {
 pub struct SimpleDownloader {
     user_agent: String,
     max_body_size: usize,
-    client: Client<HttpConnector, Body>,
+    client: Client<HttpsConnector<HttpConnector>, Body>,
 }
 
 impl SimpleDownloader {
     pub fn new(user_agent: String, max_body_size: usize) -> SimpleDownloader {
+        let https = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .https_or_http()
+            .enable_http1()
+            .build();
+
         let client = Client::builder()
             .pool_max_idle_per_host(1) // very stringent, but useful.
-            .build_http();
+            .build(https);
 
         SimpleDownloader {
             user_agent,

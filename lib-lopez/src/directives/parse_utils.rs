@@ -1,4 +1,4 @@
-use nom::error::{Error};
+use nom::error::Error;
 use nom::Err;
 use nom::IResult;
 use std::fmt;
@@ -54,21 +54,19 @@ impl fmt::Display for ParseError {
 impl ParseError {
     pub fn new(text: &str, err: Err<Error<&str>>) -> ParseError {
         match err {
-            Err::Error(Error { input, code}) | Err::Failure(Error { input, code}) => {
-                ParseError {
-                    position: Position::of(text, input),
-                    hint: input
-                        .lines()
-                        .map(str::to_owned)
-                        .next()
-                        .unwrap_or_default()
-                        .chars()
-                        .take(10)
-                        .collect::<String>()
-                        + "...",
-                    message: code.description().to_owned(),
-                }
-            }
+            Err::Error(Error { input, code }) | Err::Failure(Error { input, code }) => ParseError {
+                position: Position::of(text, input),
+                hint: input
+                    .lines()
+                    .map(str::to_owned)
+                    .next()
+                    .unwrap_or_default()
+                    .chars()
+                    .take(10)
+                    .collect::<String>()
+                    + "...",
+                message: code.description().to_owned(),
+            },
             Err::Incomplete(_) => panic!("incomplete variant no accepted"),
         }
     }

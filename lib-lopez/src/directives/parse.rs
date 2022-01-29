@@ -10,6 +10,7 @@ use nom::{
 };
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::Arc;
 use url::Url;
 
 #[cfg(test)]
@@ -17,9 +18,10 @@ use std::str::FromStr;
 
 use super::expressions::parse::*;
 use super::expressions::Parseable;
+use super::expressions::*;
 use super::parse_common::*;
 use super::parse_utils::ParseError;
-use super::*;
+use super::{Extractor, Value};
 
 fn identifier(i: &str) -> IResult<&str, &str> {
     is_not("\\/:;.()[]{}\'\" \n\t\r\0")(i)
@@ -56,7 +58,10 @@ fn identified_value_test() {
     );
 }
 
-fn block<'a, He, Va, H, V>(head: He, value: Va) -> impl FnMut(&'a str) -> IResult<&'a str, (H, Vec<V>)>
+fn block<'a, He, Va, H, V>(
+    head: He,
+    value: Va,
+) -> impl FnMut(&'a str) -> IResult<&'a str, (H, Vec<V>)>
 where
     He: FnMut(&'a str) -> IResult<&'a str, H>,
     Va: FnMut(&'a str) -> IResult<&'a str, V>,
@@ -100,7 +105,10 @@ fn css_selector(
         }
 
         if idx == 0 {
-            Err(nom::Err::Error(nom::error::Error { input: i, code: nom::error::ErrorKind::IsA }))
+            Err(nom::Err::Error(nom::error::Error {
+                input: i,
+                code: nom::error::ErrorKind::IsA,
+            }))
         } else {
             Ok((
                 &i[idx..],

@@ -26,6 +26,7 @@ where
         .spawn(move || {
             log_panics(); // can only be called once per thread!
             let mut runtime = runtime::Builder::new_current_thread()
+                .enable_all()
                 .build()
                 .expect("can build runtime");
 

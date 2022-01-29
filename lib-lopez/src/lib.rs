@@ -14,15 +14,16 @@ mod panic;
 mod cli;
 mod logger;
 pub mod pretty_print;
-mod directives2;
+pub mod r#type;
 
 pub use ansi_term;
 pub use cli::Profile;
-pub use crawler::{page_rank, start, test_url, DirectivesConfiguration};
-pub use directives::Directives;
+pub use crawler::{page_rank, start, test_url};
+pub use directives::{Directives, DirectivesConfiguration};
 pub use error::Error;
 pub use hash::hash;
 pub use logger::init_logger;
+pub use r#type::Type;
 pub use serde::Serialize;
 pub use structopt::StructOpt;
 

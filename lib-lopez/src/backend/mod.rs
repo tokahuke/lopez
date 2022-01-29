@@ -7,7 +7,7 @@ pub use structopt::StructOpt;
 pub use url::Url;
 
 pub use crate::crawler::Reason;
-pub use crate::directives::Type;
+pub use crate::Type;
 
 pub use self::dummy::DummyBackend;
 

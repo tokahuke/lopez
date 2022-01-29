@@ -1,7 +1,5 @@
 use url::Url;
 
-use crate::directives::Boundaries as ParsedBoundaries;
-
 use super::Reason;
 
 /// Performs a checked join, with all the common problems accounted for.
@@ -74,29 +72,5 @@ pub trait Boundaries: 'static + Send {
         raw_links.dedup();
 
         raw_links
-    }
-}
-
-pub struct DirectiveBoundaries {
-    boundaries: ParsedBoundaries,
-}
-
-impl DirectiveBoundaries {
-    pub fn new(boundaries: ParsedBoundaries) -> DirectiveBoundaries {
-        DirectiveBoundaries { boundaries }
-    }
-}
-
-impl Boundaries for DirectiveBoundaries {
-    fn is_allowed(&self, url: &Url) -> bool {
-        self.boundaries.is_allowed(url)
-    }
-
-    fn is_frontier(&self, url: &Url) -> bool {
-        self.boundaries.is_frontier(url)
-    }
-
-    fn clean_query_params(&self, url: Url) -> Url {
-        self.boundaries.filter_query_params(url)
     }
 }

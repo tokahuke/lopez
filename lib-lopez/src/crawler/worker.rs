@@ -12,10 +12,10 @@ use crate::backend::{WorkerBackend, WorkerBackendFactory};
 use crate::cancel::{spawn_onto_thread, Canceler};
 use crate::cli::Profile;
 
-use super::origins::Origins;
 use super::boundaries::Boundaries;
 use super::downloader::{Downloaded, Downloader};
-use super::parser::{Parser, Parsed};
+use super::origins::Origins;
+use super::parser::{Parsed, Parser};
 use super::Counter;
 use super::Reason;
 
@@ -142,24 +142,18 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
             Ok(Ok(Downloaded::Page {
                 content,
                 status_code,
-            })) => {
-                match self.parser.parse(page_url, &content) {
-                    Parsed::Accepted { links, analyses} => {
-                        Crawled::Success {
-                            status_code,
-                            links: self.boundaries.clean_links(page_url, &links),
-                            analyses,
-                        }
-                    },
-                    Parsed::NotAccepted => {
-                        Crawled::Success {
-                            status_code,
-                            links: vec![],
-                            analyses: vec![],
-                        }
-                    }
-                }
-            }
+            })) => match self.parser.parse(page_url, &content) {
+                Parsed::Accepted { links, analyses } => Crawled::Success {
+                    status_code,
+                    links: self.boundaries.clean_links(page_url, &links),
+                    analyses,
+                },
+                Parsed::NotAccepted => Crawled::Success {
+                    status_code,
+                    links: vec![],
+                    analyses: vec![],
+                },
+            },
             Ok(Ok(Downloaded::BadStatus { status_code, .. })) => Crawled::BadStatus { status_code },
             Ok(Ok(Downloaded::Redirect {
                 location,
@@ -262,7 +256,10 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
         depth: u16,
     ) -> Result<(), crate::Error> {
         // Get origin:
-        let origin = self.origins.get_origin_for_url(&self.downloader, &page_url).await;
+        let origin = self
+            .origins
+            .get_origin_for_url(&self.downloader, &page_url)
+            .await;
 
         // Do not do anything if disallowed:
         if !origin.allows(page_url) {
@@ -324,7 +321,7 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
 
                         // Register close, no matter the status.
                         worker_ref.task_counter.register_closed();
- 
+
                         // Now, analyze results:
                         if let Err(error) = result {
                             worker_ref.task_counter.register_error();
@@ -353,7 +350,10 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
         }
 
         // Get origin:
-        let origin = self.origins.get_origin_for_url(&self.downloader, &actual_url).await;
+        let origin = self
+            .origins
+            .get_origin_for_url(&self.downloader, &actual_url)
+            .await;
 
         // Do not do anything if disallowed:
         if !origin.allows(&actual_url) {

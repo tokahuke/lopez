@@ -2,7 +2,9 @@ use scraper::ElementRef;
 use serde_json::{Map, Value};
 use std::fmt;
 
-use super::expressions::{Error, Extractable, ExtractorExpression, Type, Typed};
+use crate::Type;
+
+use super::expressions::{Error, Extractable, ExtractorExpression, Typed};
 
 #[derive(Debug, PartialEq)]
 pub enum Extractor {

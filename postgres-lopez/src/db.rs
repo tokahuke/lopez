@@ -1,6 +1,7 @@
 use include_dir::Dir;
 use migrant_lib::migration::EmbeddedMigration;
 use migrant_lib::{Config, Migratable, Migrator, Settings};
+use std::env;
 use std::rc::Rc;
 use std::sync::Arc;
 use structopt::StructOpt;
@@ -19,31 +20,49 @@ macro_rules! params {
 #[derive(Debug, StructOpt)]
 pub struct DbConfig {
     /// The host name of the PostgreSQL server.
-    #[structopt(long, env = "DB_HOST")]
+    #[structopt(long, env = "DB_HOST", default_value = "localhost")]
     host: String,
     /// The port number of the PostgreSQL server.
     #[structopt(long, default_value = "5432", env = "DB_PORT")]
     port: u16,
     /// The user that the application will use to log into the server.
     #[structopt(long, env = "DB_USER")]
-    user: String,
+    user: Option<String>,
     /// The name of the database in the server in which information will be
     /// stored.
     #[structopt(long, env = "DB_DBNAME")]
-    dbname: String,
+    dbname: Option<String>,
     /// The password of the user that the application will use to log into the
     /// server.
-    #[structopt(long, env = "DB_PASSWORD")]
+    #[structopt(long, env = "DB_PASSWORD", default_value = "")]
     password: String,
 }
 
 impl DbConfig {
+    fn user(&self) -> String {
+        self.user
+            .clone()
+            .or_else(|| env::var("USER").ok())
+            .unwrap_or_default()
+    }
+
+    fn dbname(&self) -> String {
+        self.dbname
+            .clone()
+            .or_else(|| env::var("USER").ok())
+            .unwrap_or_default()
+    }
+
     pub async fn connect(&self) -> Result<Rc<Client>, crate::Error> {
         // Connect to database:
         let (client, connection) = pg_connect(
             &format!(
                 "host={} port={} user={} dbname={} password={}",
-                self.host, self.port, self.user, self.dbname, self.password,
+                self.host,
+                self.port,
+                self.user(),
+                self.dbname(),
+                self.password,
             ),
             NoTls,
         )
@@ -65,7 +84,11 @@ impl DbConfig {
         let (client, connection) = pg_connect(
             &format!(
                 "host={} port={} user={} dbname={} password={}",
-                self.host, self.port, self.user, "postgres", self.password,
+                self.host,
+                self.port,
+                self.user(),
+                "postgres",
+                self.password,
             ),
             NoTls,
         )
@@ -80,7 +103,7 @@ impl DbConfig {
 
         // Now, do the thing:
         let outcome = client
-            .simple_query(&format!("create database \"{}\";", self.dbname))
+            .simple_query(&format!("create database \"{}\";", self.dbname()))
             .await;
 
         // Duplicate databases are ok:
@@ -137,8 +160,8 @@ impl DbConfig {
             let settings = Settings::configure_postgres()
                 .database_host(&self.host)
                 .database_port(self.port)
-                .database_name(&self.dbname)
-                .database_user(&self.user)
+                .database_name(&self.dbname())
+                .database_user(&self.user())
                 .database_password(&self.password)
                 .build()?;
 
