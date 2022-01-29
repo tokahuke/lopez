@@ -1,12 +1,13 @@
 //! Remember: idempotent atomic operations are the key.
 
+#![feature(never_type)]
+
 mod crawler;
 #[macro_use]
 pub mod backend;
 mod cancel;
 mod directives;
 mod env;
-mod error;
 mod hash;
 mod page_rank;
 mod panic;
@@ -17,10 +18,10 @@ pub mod pretty_print;
 pub mod r#type;
 
 pub use ansi_term;
+pub use anyhow;
 pub use cli::Profile;
-pub use crawler::{page_rank, start, test_url};
+pub use crawler::{CrawlMaster, DummyConfiguration, LocalHandlerFactory};
 pub use directives::{Directives, DirectivesConfiguration};
-pub use error::Error;
 pub use hash::hash;
 pub use logger::init_logger;
 pub use r#type::Type;
@@ -77,29 +78,27 @@ macro_rules! main {
                         std::process::exit(0)
                     }
                     Ok(None) => std::process::exit(0),
-                    Err(Some(err)) => {
+                    Err(err) => {
                         print_json(&serde_json::json!({ "Err": err.to_string() }));
                         std::process::exit(1)
                     }
-                    Err(None) => std::process::exit(1),
                 }
             } else {
                 match run(cli).await {
                     Ok(Some(msg)) => {
-                        println!("{}: {}", Green.bold().paint("ok"), msg);
+                        println!("{}: {msg}", Green.bold().paint("ok"));
                         std::process::exit(0)
                     }
                     Ok(None) => std::process::exit(0),
-                    Err(Some(err)) => {
-                        println!("{}: {}", Red.bold().paint("error"), err);
+                    Err(err) => {
+                        println!("{}: {err}", Red.bold().paint("error"));
                         std::process::exit(1)
                     }
-                    Err(None) => std::process::exit(1),
                 }
             }
         }
 
-        async fn run(cli: Cli) -> Result<Option<String>, Option<$crate::Error>> {
+        async fn run(cli: Cli) -> Result<Option<String>, $crate::anyhow::Error> {
             use std::sync::Arc;
 
             use $crate::ansi_term::Color::Red;
@@ -119,7 +118,6 @@ macro_rules! main {
                     // Open directives:
                     Directives::load(source, cli.import_path)
                         .map(|_| Some("valid configuration".to_owned()))
-                        .map_err(|err| Some(err.into()))
                 }
                 LopezApp::Test {
                     source,
@@ -137,7 +135,7 @@ macro_rules! main {
                                 print_json(&Err(format!("{}", err)) as &Result<(), _>);
                                 Ok(None)
                             } else {
-                                Err(Some(err.into()))
+                                Err(err.into())
                             }
                         }
                         Ok(url) => {
@@ -148,15 +146,16 @@ macro_rules! main {
                                         print_json(&Err(format!("{}", err)) as &Result<(), _>);
                                         Ok(None)
                                     } else {
-                                        Err(Some(err.into()))
+                                        Err(err)
                                     }
                                 }
                                 Ok(directives) => {
                                     let directives = directives;
                                     let configuration = $crate::DirectivesConfiguration::new(directives);
+                                    let crawl_master = $crate::CrawlMaster::new(configuration, $crate::backend::DummyBackend::default(), $crate::LocalHandlerFactory);
 
                                     // Create report:
-                                    let report = $crate::test_url(Arc::new(Profile::default()), configuration, url)
+                                    let report = crawl_master.test_url(Arc::new(Profile::default()), url)
                                         .await;
 
                                     // Show report:
@@ -182,14 +181,19 @@ macro_rules! main {
                     $crate::init_logger(cli.verbose);
 
                     // Open directives:
-                    let directives = Directives::load(source, cli.import_path).map_err(|err| Some(err.into()))?;
+                    let directives = Directives::load(source, cli.import_path)?;
                     let configuration = $crate::DirectivesConfiguration::new(directives);
 
                     // Create backend:
-                    let backend = <$backend_ty>::init(config, &wave_name).await.map_err(|err| Some(err.into()))?;
+                    let backend = <$backend_ty>::init(config, &wave_name).await?;
 
                     // Do the thing!
-                    $crate::start(Arc::new(profile), configuration, backend).await?;
+                    let crawl_master = $crate::CrawlMaster::new(
+                        configuration,
+                        backend,
+                        $crate::LocalHandlerFactory
+                    );
+                    crawl_master.start(Arc::new(profile)).await?;
 
                     Ok(Some("crawl complete".to_owned()))
                 }
@@ -202,9 +206,9 @@ macro_rules! main {
                         $crate::init_logger(cli.verbose);
                     }
 
-                    let mut backend = <$backend_ty>::init(config, &wave_name).await.map_err(|err| Some(err.into()))?;
+                    let mut backend = <$backend_ty>::init(config, &wave_name).await?;
 
-                    let remove_report = backend.remove().await.map_err(|err| Some(err.into()))?;
+                    let remove_report = backend.remove().await?;
 
                     if cli.json {
                         print_json(&remove_report);
@@ -215,23 +219,26 @@ macro_rules! main {
                         } else if ignore {
                             Ok(Some(format!("wave `{}` not removed (ignoring)", wave_name)))
                         } else {
-                            Err(Some(
-                                format!("wave `{}` cannot be removed (does it exist?)", wave_name)
-                                    .into(),
-                            ))
+                            Err(
+                                $crate::anyhow::anyhow!("wave `{wave_name}` cannot be removed (does it exist?)")
+                            )
                         }
                     }
-
                 }
                 LopezApp::PageRank { wave_name, config } => {
                     // Init logging:
                     $crate::init_logger(cli.verbose);
 
                     // Create backend:
-                    let backend = <$backend_ty>::init(config, &wave_name).await.map_err(|err| Some(err.into()))?;
+                    let backend = <$backend_ty>::init(config, &wave_name).await?;
 
                     // Do the thing.
-                    $crate::page_rank(backend).await.map_err(|err| Some(err.into()))?;
+                    let crawl_master = $crate::CrawlMaster::new(
+                        $crate::DummyConfiguration,
+                        backend,
+                        $crate::LocalHandlerFactory
+                    );
+                    crawl_master.page_rank().await?;
 
                     Ok(Some("page rank done".to_owned()))
                 }

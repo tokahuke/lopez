@@ -37,7 +37,7 @@ fn read_from_many<P: AsRef<Path>>(paths: &[P]) -> Result<(&P, String), io::Error
 fn load_items_from<'a, P: AsRef<Path>>(
     module_name: &str,
     paths: &'a [P],
-) -> Result<(&'a P, Vec<Item>), String> {
+) -> Result<(&'a P, Vec<Item>), anyhow::Error> {
     let formatted_module_name = if module_name.is_empty() {
         "<main>"
     } else {
@@ -49,26 +49,27 @@ fn load_items_from<'a, P: AsRef<Path>>(
     let printable_paths = paths.iter().map(P::as_ref).collect::<Vec<_>>();
 
     let (path, module_str) = read_from_many(paths).map_err(|err| {
-        format!(
-            "could not open module `{}` from paths `{:?}`: {}",
-            formatted_module_name, printable_paths, err
+        anyhow::anyhow!(
+            "could not open module `{formatted_module_name}` from paths `{printable_paths:?}`: {err}",
         )
     })?;
 
     let module = super::parse::entrypoint(&module_str)
-        .map_err(|err| format!("failed to parse `{}`: {}", formatted_module_name, err))?
-        .map_err(|err| format!("failed to interpret `{}`: {}", formatted_module_name, err))?;
+        .map_err(|err| anyhow::anyhow!("failed to parse `{formatted_module_name}`: {err}"))?
+        .map_err(|err| anyhow::anyhow!("failed to interpret `{formatted_module_name}`: {err}"))?;
 
     Ok((path, module))
 }
 
 /// Strips `supers` and `roots` from a module path. Returns errors if put into
 /// an impossible position.
-fn canonical_path(path: &str) -> Result<String, String> {
+fn canonical_path(path: &str) -> Result<String, anyhow::Error> {
     let mut parts = vec![];
     for part in path.split(SEPARATOR) {
         match part {
-            "super" if path.is_empty() => return Err(format!("got empty path from `{}`", path)),
+            "super" if path.is_empty() => {
+                return Err(anyhow::anyhow!("got empty path from `{path}`"))
+            }
             "super" => {
                 parts.pop();
             }
@@ -169,7 +170,7 @@ impl Module {
         module_name: String,
         modules: &mut BTreeMap<String, Module>,
         paths: &[Q],
-    ) -> Result<(), String> {
+    ) -> Result<(), anyhow::Error> {
         if modules.contains_key(&module_name) {
             return Ok(());
         }
@@ -292,7 +293,7 @@ impl Directives {
 
     /// Validates if all directives "are sound". Returns an error message if
     /// any error is found.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), anyhow::Error> {
         let mut issues = vec![];
         let duplicates = self.find_duplicate_rules();
         if !duplicates.is_empty() {
@@ -357,7 +358,7 @@ impl Directives {
         }
 
         if !issues.is_empty() {
-            Err(format!(
+            Err(anyhow::anyhow!(
                 "There are issues with your configuration: \n{}",
                 issues.join("\n")
             ))
@@ -367,11 +368,14 @@ impl Directives {
     }
 
     /// Loads directives from a given file while also loading all dependencies.
-    pub fn load<P: AsRef<Path>, Q: AsRef<Path>>(path: P, imports: Q) -> Result<Self, String> {
+    pub fn load<P: AsRef<Path>, Q: AsRef<Path>>(
+        path: P,
+        imports: Q,
+    ) -> Result<Self, anyhow::Error> {
         let parent = path
             .as_ref()
             .parent()
-            .ok_or_else(|| "path cannot be root".to_owned())?;
+            .ok_or_else(|| anyhow::anyhow!("path cannot be root"))?;
         let mut modules = BTreeMap::new();
 
         Module::load(

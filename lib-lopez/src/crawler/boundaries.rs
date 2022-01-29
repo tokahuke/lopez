@@ -3,7 +3,7 @@ use url::Url;
 use super::Reason;
 
 /// Performs a checked join, with all the common problems accounted for.
-fn checked_join(base_url: &Url, raw: &str) -> Result<Url, crate::Error> {
+fn checked_join(base_url: &Url, raw: &str) -> Result<Url, anyhow::Error> {
     // Parse the thing.
     let maybe_url = raw.parse().or_else(|err| {
         if err == url::ParseError::RelativeUrlWithoutBase {
@@ -16,24 +16,24 @@ fn checked_join(base_url: &Url, raw: &str) -> Result<Url, crate::Error> {
     let url = if let Ok(url) = maybe_url {
         url
     } else {
-        return Err(crate::Error::Custom(format!("bad link: {}", raw)));
+        return Err(anyhow::anyhow!("bad link: {}", raw));
     };
 
     // Get rid of those pesky "#" section references and of weird empty strings:
     if raw.is_empty() || raw.starts_with('#') {
-        return Err(crate::Error::Custom(format!("bad link: {}", raw)));
+        return Err(anyhow::anyhow!("bad link: {}", raw));
     }
 
     // Now, make sure this is really HTTP (not mail, ftp and what not):
     if url.scheme() != "http" && url.scheme() != "https" {
-        return Err(crate::Error::Custom(format!("unaccepted scheme: {}", raw)));
+        return Err(anyhow::anyhow!("unaccepted scheme: {}", raw));
     }
 
     // Check if internal or external.
     if url.domain().is_some() {
         Ok(url)
     } else {
-        Err(crate::Error::Custom(format!("no domain: {}", raw)))
+        Err(anyhow::anyhow!("no domain: {}", raw))
     }
 }
 
@@ -72,5 +72,21 @@ pub trait Boundaries: 'static + Send {
         raw_links.dedup();
 
         raw_links
+    }
+}
+
+pub struct DummyBoundaries;
+
+impl Boundaries for DummyBoundaries {
+    fn is_allowed(&self, _url: &Url) -> bool {
+        false
+    }
+
+    fn is_frontier(&self, _url: &Url) -> bool {
+        true
+    }
+
+    fn clean_query_params(&self, url: Url) -> Url {
+        url
     }
 }

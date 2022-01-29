@@ -6,6 +6,7 @@ use url::{Position, Url};
 
 use super::downloader::{Downloaded, Downloader};
 
+#[derive(Debug)]
 pub struct RobotExclusion {
     disallow: Vec<Match>,
     crawl_delay: Option<f64>,
@@ -46,6 +47,7 @@ impl RobotExclusion {
     }
 }
 
+#[derive(Debug)]
 struct Match {
     match_str: String,
     is_strict: bool,
@@ -120,10 +122,10 @@ Sitemap: https://querobolsa.com.br/sitemap_index.xml
 }
 
 /// Tries to get robots.txt for *exactly* that `base_url`.
-async fn do_get_robots<D: Downloader>(
-    downloader: &D,
+async fn do_get_robots(
+    downloader: &dyn Downloader,
     base_url: &Url,
-) -> Result<Option<String>, crate::Error> {
+) -> Result<Option<String>, anyhow::Error> {
     // Make the request.
     let mut robots_url: Url = base_url.join("/robots.txt")?;
 
@@ -146,10 +148,10 @@ async fn do_get_robots<D: Downloader>(
 }
 
 /// Tries to get robots.txt for that `base_url`, going up a domain recursively if not found.
-pub async fn get_robots<D: Downloader>(
-    downloader: &D,
+pub async fn get_robots(
+    downloader: &dyn Downloader,
     mut base_url: Url,
-) -> Result<Option<String>, crate::Error> {
+) -> Result<Option<String>, anyhow::Error> {
     let mut robots = None;
 
     // If not successful, try one level up:

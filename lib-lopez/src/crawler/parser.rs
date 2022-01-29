@@ -16,3 +16,11 @@ pub enum Parsed {
 pub trait Parser: 'static + Send {
     fn parse(&self, page_url: &Url, content: &[u8]) -> Parsed;
 }
+
+pub struct DummyParser;
+
+impl Parser for DummyParser {
+    fn parse(&self, _page_url: &Url, _content: &[u8]) -> Parsed {
+        panic!("cannot use DummyParser")
+    }
+}

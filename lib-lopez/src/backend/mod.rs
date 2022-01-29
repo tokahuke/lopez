@@ -12,6 +12,7 @@ pub use crate::Type;
 pub use self::dummy::DummyBackend;
 
 use serde_derive::Serialize;
+use std::fmt::Debug;
 
 use crate::page_rank::power_iteration;
 
@@ -43,55 +44,46 @@ impl WaveRemoveReport {
 
 #[async_trait(?Send)]
 pub trait Backend: Sized {
-    type Error: Into<crate::Error>;
     type Config: StructOpt;
-    type Master: MasterBackend<Error = Self::Error>;
-    type WorkerFactory: WorkerBackendFactory<Error = Self::Error>;
-    type Ranker: PageRanker<Error = Self::Error>;
+    type Ranker: PageRanker;
 
-    async fn init(config: Self::Config, wave: &str) -> Result<Self, Self::Error>;
-    async fn build_master(&mut self) -> Result<Self::Master, Self::Error>;
-    fn build_worker_factory(&mut self, wave_id: i32) -> Self::WorkerFactory;
-    async fn build_ranker(&mut self, wave_id: i32) -> Result<Self::Ranker, Self::Error>;
+    async fn init(config: Self::Config, wave: &str) -> Result<Self, anyhow::Error>;
+    async fn build_master(&mut self) -> Result<Box<dyn MasterBackend>, anyhow::Error>;
+    fn build_worker_factory(&mut self, wave_id: i32) -> Box<dyn WorkerBackendFactory>;
+    async fn build_ranker(&mut self, wave_id: i32) -> Result<Self::Ranker, anyhow::Error>;
 
     /// This may become a mandatory method in future releases.
-    async fn remove(&mut self) -> Result<WaveRemoveReport, Self::Error> {
+    async fn remove(&mut self) -> Result<WaveRemoveReport, anyhow::Error> {
         Ok(WaveRemoveReport::not_removed())
     }
 }
 
 #[async_trait(?Send)]
 pub trait MasterBackend {
-    type Error: Into<crate::Error>;
-
     fn wave_id(&mut self) -> i32;
-    async fn ensure_seeded(&mut self, seeds: &[Url]) -> Result<(), Self::Error>;
-    async fn create_analyses(&mut self, analyses: &[(String, Type)]) -> Result<(), Self::Error>;
-    async fn count_crawled(&mut self) -> Result<usize, Self::Error>;
-    async fn reset_queue(&mut self) -> Result<(), Self::Error>;
+    async fn ensure_seeded(&mut self, seeds: &[Url]) -> Result<(), anyhow::Error>;
+    async fn create_analyses(&mut self, analyses: &[(String, Type)]) -> Result<(), anyhow::Error>;
+    async fn count_crawled(&mut self) -> Result<usize, anyhow::Error>;
+    async fn reset_queue(&mut self) -> Result<(), anyhow::Error>;
     async fn fetch(
         &mut self,
         batch_size: i64,
         max_depth: i16,
-    ) -> Result<Vec<(Url, u16)>, Self::Error>;
+    ) -> Result<Vec<(Url, u16)>, anyhow::Error>;
 }
 
 #[async_trait(?Send)]
-pub trait WorkerBackendFactory: 'static + Send + Sync {
-    type Error: Into<crate::Error>;
-    type Worker: WorkerBackend<Error = Self::Error>;
-    async fn build(&mut self) -> Result<Self::Worker, Self::Error>;
+pub trait WorkerBackendFactory: 'static + Send + Sync + Debug {
+    async fn build(&self) -> Result<Box<dyn WorkerBackend>, anyhow::Error>;
 }
 
 #[async_trait(?Send)]
 pub trait WorkerBackend {
-    type Error: Into<crate::Error>;
-
     async fn ensure_analyzed(
         &self,
         url: &Url,
         analyses: Vec<(String, Value)>,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), anyhow::Error>;
 
     async fn ensure_explored(
         &self,
@@ -99,22 +91,24 @@ pub trait WorkerBackend {
         status_code: StatusCode,
         link_depth: u16,
         links: Vec<(Reason, Url)>,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), anyhow::Error>;
 
-    async fn ensure_error(&self, url: &Url) -> Result<(), Self::Error>;
+    async fn ensure_error(&self, url: &Url) -> Result<(), anyhow::Error>;
 }
 
 #[async_trait(?Send)]
 pub trait PageRanker {
-    type Error: Into<crate::Error>;
     type PageId: Ord + Clone;
 
     async fn linkage(
         &mut self,
-    ) -> Result<Box<dyn Iterator<Item = (Self::PageId, Self::PageId)>>, Self::Error>;
-    async fn push_page_ranks(&mut self, ranked: &[(Self::PageId, f64)]) -> Result<(), Self::Error>;
+    ) -> Result<Box<dyn Iterator<Item = (Self::PageId, Self::PageId)>>, anyhow::Error>;
+    async fn push_page_ranks(
+        &mut self,
+        ranked: &[(Self::PageId, f64)],
+    ) -> Result<(), anyhow::Error>;
 
-    async fn page_rank(&mut self) -> Result<(), Self::Error> {
+    async fn page_rank(&mut self) -> Result<(), anyhow::Error> {
         // Create a stream of links:
         let edges = self.linkage().await?;
 

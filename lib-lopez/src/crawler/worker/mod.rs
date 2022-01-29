@@ -1,10 +1,10 @@
+use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::future;
 use futures::prelude::*;
 use hyper::StatusCode;
 use serde_derive::Serialize;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 use url::{ParseError, Url};
 
@@ -16,11 +16,75 @@ use super::boundaries::Boundaries;
 use super::downloader::{Downloaded, Downloader};
 use super::origins::Origins;
 use super::parser::{Parsed, Parser};
+use super::Configuration;
 use super::Counter;
 use super::Reason;
 
+pub type WorkerId = u64;
+
+#[async_trait]
+pub trait WorkerHandler {
+    async fn send_task(&mut self, url: Url, depth: u16) -> Result<(), ()>;
+    async fn terminate(self);
+}
+
+pub trait WorkerHandlerFactory {
+    type Handler: WorkerHandler;
+    fn build(
+        &self,
+        configuration: &dyn Configuration,
+        worker_backend_factory: Arc<dyn WorkerBackendFactory>,
+        profile: Arc<Profile>,
+        counter: Arc<Counter>,
+        origins: Arc<Origins>,
+        worker_id: WorkerId,
+    ) -> Self::Handler;
+}
+
+pub struct LocalHandlerFactory;
+
+impl WorkerHandlerFactory for LocalHandlerFactory {
+    type Handler = LocalHandler;
+    fn build(
+        &self,
+        configuration: &dyn Configuration,
+        worker_backend_factory: Arc<dyn WorkerBackendFactory>,
+        profile: Arc<Profile>,
+        counter: Arc<Counter>,
+        origins: Arc<Origins>,
+        worker_id: WorkerId,
+    ) -> Self::Handler {
+        let (sender, canceler) = CrawlWorker::new(
+            configuration,
+            worker_backend_factory,
+            counter,
+            profile,
+            origins,
+        )
+        .run(worker_id);
+
+        LocalHandler { sender, canceler }
+    }
+}
+
+pub struct LocalHandler {
+    sender: mpsc::Sender<(Url, u16)>,
+    canceler: Canceler,
+}
+
+#[async_trait]
+impl WorkerHandler for LocalHandler {
+    async fn send_task(&mut self, url: Url, depth: u16) -> Result<(), ()> {
+        self.sender.send((url, depth)).await.map_err(|_| ())
+    }
+
+    async fn terminate(self) {
+        self.canceler.cancel().await
+    }
+}
+
 /// Performs a checked join, with all the common problems accounted for.
-pub fn checked_join(base_url: &Url, raw: &str) -> Result<Url, crate::Error> {
+pub fn checked_join(base_url: &Url, raw: &str) -> Result<Url, anyhow::Error> {
     // Parse the thing.
     let maybe_url = raw.parse().or_else(|err| {
         if err == ParseError::RelativeUrlWithoutBase {
@@ -33,24 +97,24 @@ pub fn checked_join(base_url: &Url, raw: &str) -> Result<Url, crate::Error> {
     let url = if let Ok(url) = maybe_url {
         url
     } else {
-        return Err(crate::Error::Custom(format!("bad link: {}", raw)));
+        return Err(anyhow::anyhow!("bad link: {}", raw));
     };
 
     // Get rid of those pesky "#" section references and of weird empty strings:
     if raw.is_empty() || raw.starts_with('#') {
-        return Err(crate::Error::Custom(format!("bad link: {}", raw)));
+        return Err(anyhow::anyhow!("bad link: {}", raw));
     }
 
     // Now, make sure this is really HTTP (not mail, ftp and what not):
     if url.scheme() != "http" && url.scheme() != "https" {
-        return Err(crate::Error::Custom(format!("unaccepted scheme: {}", raw)));
+        return Err(anyhow::anyhow!("unaccepted scheme: {}", raw));
     }
 
     // Check if internal or external.
     if url.domain().is_some() {
         Ok(url)
     } else {
-        Err(crate::Error::Custom(format!("no domain: {}", raw)))
+        Err(anyhow::anyhow!("no domain: {}", raw))
     }
 }
 
@@ -80,7 +144,7 @@ pub(crate) enum Crawled {
         status_code: StatusCode,
         location: String,
     },
-    Error(crate::Error),
+    Error(anyhow::Error),
     TimedOut,
 }
 
@@ -97,37 +161,34 @@ pub(crate) enum ReportType {
     Crawled(Crawled),
 }
 
-pub struct CrawlWorker<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> {
-    downloader: D,
-    parser: P,
-    boundaries: B,
+pub struct CrawlWorker {
+    downloader: Box<dyn Downloader>,
+    parser: Box<dyn Parser>,
+    boundaries: Box<dyn Boundaries>,
     task_counter: Arc<Counter>,
     profile: Arc<Profile>,
-    worker_backend_factory: Arc<Mutex<WF>>,
+    worker_backend_factory: Arc<dyn WorkerBackendFactory>,
     origins: Arc<Origins>,
     request_timeout: f64,
 }
 
-impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWorker<D, P, B, WF> {
+impl CrawlWorker {
     pub fn new(
-        downloader: D,
-        parser: P,
-        boundaries: B,
-        worker_backend_factory: Arc<Mutex<WF>>,
+        configuration: &dyn Configuration,
+        worker_backend_factory: Arc<dyn WorkerBackendFactory>,
         task_counter: Arc<Counter>,
         profile: Arc<Profile>,
         origins: Arc<Origins>,
-        request_timeout: f64,
-    ) -> CrawlWorker<D, P, B, WF> {
+    ) -> CrawlWorker {
         CrawlWorker {
-            downloader,
+            downloader: configuration.downloader(),
             task_counter,
             profile,
-            parser,
-            boundaries,
+            parser: configuration.parser(),
+            boundaries: configuration.boundaries(),
             worker_backend_factory,
             origins,
-            request_timeout,
+            request_timeout: configuration.parameters().request_timeout,
         }
     }
 
@@ -171,11 +232,11 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
 
     async fn store(
         &self,
-        worker_backend: &WF::Worker,
+        worker_backend: &dyn WorkerBackend,
         page_url: &Url,
         depth: u16,
         crawled: Crawled,
-    ) -> Result<(), crate::Error> {
+    ) -> Result<(), anyhow::Error> {
         match crawled {
             Crawled::Success {
                 status_code,
@@ -183,22 +244,17 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
                 analyses,
             } => {
                 // Perform analyses:
-                worker_backend
-                    .ensure_analyzed(page_url, analyses)
-                    .await
-                    .map_err(|err| err.into())?;
+                worker_backend.ensure_analyzed(page_url, analyses).await?;
 
                 // Mark as explored:
                 worker_backend
                     .ensure_explored(page_url, status_code, depth + 1, links)
-                    .await
-                    .map_err(|err| err.into())?;
+                    .await?;
             }
             Crawled::BadStatus { status_code } => {
                 worker_backend
                     .ensure_explored(page_url, status_code, depth + 1, vec![])
-                    .await
-                    .map_err(|err| err.into())?;
+                    .await?;
             }
             Crawled::Redirect {
                 status_code,
@@ -218,28 +274,21 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
                                     self.boundaries.clean_query_params(location),
                                 )],
                             )
-                            .await
-                            .map_err(|err| err.into())?;
+                            .await?;
                     }
                 }
                 Err(err) => log::debug!("at {}: {}", page_url, err),
             },
             Crawled::Error(error) => {
                 log::debug!("at {} got: {}", page_url, error);
-                worker_backend
-                    .ensure_error(page_url)
-                    .await
-                    .map_err(|err| err.into())?;
+                worker_backend.ensure_error(page_url).await?;
 
                 // This needs to be the last thing (because of `?`).
                 self.task_counter.register_error();
             }
             Crawled::TimedOut => {
                 log::debug!("at {}: got timeout", page_url);
-                worker_backend
-                    .ensure_error(page_url)
-                    .await
-                    .map_err(|err| err.into())?;
+                worker_backend.ensure_error(page_url).await?;
 
                 // This needs to be the last thing (because of `?`).
                 self.task_counter.register_error();
@@ -251,14 +300,14 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
 
     pub async fn crawl_task(
         &self,
-        worker_backend: &WF::Worker,
+        worker_backend: &dyn WorkerBackend,
         page_url: &Url,
         depth: u16,
-    ) -> Result<(), crate::Error> {
+    ) -> Result<(), anyhow::Error> {
         // Get origin:
         let origin = self
             .origins
-            .get_origin_for_url(&self.downloader, &page_url)
+            .get_origin_for_url(&*self.downloader, &page_url)
             .await;
 
         // Do not do anything if disallowed:
@@ -280,7 +329,7 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
         Ok(())
     }
 
-    pub fn run(self, worker_id: usize) -> (mpsc::Sender<(Url, u16)>, Canceler) {
+    pub fn run(self, worker_id: WorkerId) -> (mpsc::Sender<(Url, u16)>, Canceler) {
         let max_tasks_per_worker = self.profile.max_tasks_per_worker;
         let (url_sender, url_stream) = mpsc::channel(2 * max_tasks_per_worker);
         let canceler = spawn_onto_thread(format!("lpz-wrk-{}", worker_id), move || async move {
@@ -289,12 +338,11 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
             // Spawn all connections:
             let worker_backends = future::join_all(
                 (0..self.profile.backends_per_worker)
-                    .map(|_| async { self.worker_backend_factory.lock().await.build().await }),
+                    .map(|_| async { self.worker_backend_factory.build().await }),
             )
             .await
             .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|err| err.into())?
+            .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .collect::<Vec<_>>();
 
@@ -313,7 +361,7 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
                         // Run the task:
                         let result = worker_ref
                             .crawl_task(
-                                &worker_backends[i % worker_backends.len()],
+                                &*worker_backends[i % worker_backends.len()],
                                 &page_url,
                                 depth,
                             )
@@ -333,7 +381,7 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
 
             log::info!("Stream dried. Worker stopping...");
 
-            Ok(()) as Result<_, crate::Error>
+            Ok(()) as Result<_, anyhow::Error>
         });
 
         (url_sender, canceler)
@@ -352,7 +400,7 @@ impl<D: Downloader, P: Parser, B: Boundaries, WF: WorkerBackendFactory> CrawlWor
         // Get origin:
         let origin = self
             .origins
-            .get_origin_for_url(&self.downloader, &actual_url)
+            .get_origin_for_url(&*self.downloader, &actual_url)
             .await;
 
         // Do not do anything if disallowed:

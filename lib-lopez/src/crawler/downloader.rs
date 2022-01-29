@@ -25,9 +25,25 @@ pub enum Downloaded {
 }
 
 #[async_trait]
-pub trait Downloader: 'static + Send {
-    async fn download(&self, page_url: &Url) -> Result<Downloaded, crate::Error>;
+pub trait Downloader: 'static + Send + Sync {
+    async fn download(&self, page_url: &Url) -> Result<Downloaded, anyhow::Error>;
 }
+
+pub struct DummyDownloader;
+
+#[async_trait]
+impl Downloader for DummyDownloader {
+    async fn download(&self, _page_url: &Url) -> Result<Downloaded, anyhow::Error> {
+        panic!("cannot use DummyDownloader")
+    }
+}
+
+// #[async_trait]
+// impl Downloader for Box<dyn Downloader> {
+//     async fn download(&self, page_url: &Url) -> Result<Downloaded, anyhow::Error> {
+//         self.as_ref().download(page_url).await
+//     }
+// }
 
 pub struct SimpleDownloader {
     user_agent: String,
@@ -57,7 +73,7 @@ impl SimpleDownloader {
 
 #[async_trait]
 impl Downloader for SimpleDownloader {
-    async fn download(&self, page_url: &Url) -> Result<Downloaded, crate::Error> {
+    async fn download(&self, page_url: &Url) -> Result<Downloaded, anyhow::Error> {
         // Make the request.
         let uri: hyper::Uri = page_url.as_str().parse()?; // uh! patchy
         let builder = Request::get(uri);
@@ -80,7 +96,7 @@ impl Downloader for SimpleDownloader {
             let location_value = headers
                 .get(http::header::LOCATION)
                 .cloned()
-                .ok_or(crate::Error::NoLocationOnRedirect)?;
+                .ok_or_else(|| anyhow::anyhow!("no Location header on redirect"))?;
 
             // Force UTF-8, dammit!
             let location = String::from_utf8_lossy(location_value.as_bytes()).into_owned();
@@ -134,7 +150,7 @@ impl Downloader for SimpleDownloader {
                     DeflateDecoder::new(&content[..]).read_to_end(&mut decoded)?;
                     decoded
                 }
-                _ => return Err(crate::Error::UnknownContentEncoding(encoding)),
+                _ => return Err(anyhow::anyhow!("unknown content encoding {encoding}")),
             };
 
             Ok(Downloaded::Page {

@@ -15,6 +15,7 @@ url = { version = "2.2.2", features = ["serde"] }
 http = "0.2.6"
 libflate = "1.1.1"
 robots_txt = "0.7.0"
+tarpc = {version = "0.27.2", features = ["tokio1"] }
 
 # Runtime:
 futures = "0.3.19"
@@ -30,6 +31,9 @@ serde_json = "1.0.75"
 siphasher = "0.3.9"
 nom = "7.1.0"
 regex = "1.5.4"
+serde_regex = "1.1.0"
+pest = "2.1.3"
+pest_derive = "2.1.0"
 
 # Sonstiges:
 lazy_static = "1.4.0"
@@ -44,6 +48,6 @@ log4rs = "1.0.0"
 cached = { version = "0.30.0", default-features = false }
 smallvec = "1.8.0"
 colored_json = "2.1.0"
-serde_regex = "1.1.0"
-pest = "2.1.3"
-pest_derive = "2.1.0"
+typetag = "0.1.8"
+anyhow = "1.0.53"
+rand = "0.8.4"

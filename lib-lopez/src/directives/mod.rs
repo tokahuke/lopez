@@ -19,7 +19,7 @@ use serde_json::Value;
 use url::Url;
 
 use crate::crawler::{
-    Boundaries, Configuration, Parameters, Parsed, Parser, Reason, SimpleDownloader,
+    Boundaries, Configuration, Downloader, Parameters, Parsed, Parser, Reason, SimpleDownloader,
 };
 use crate::Type;
 
@@ -76,6 +76,7 @@ impl Boundaries for DirectiveBoundaries {
     }
 }
 
+#[derive(Debug)]
 pub struct DirectivesConfiguration {
     directives: Directives,
     variables: SetVariables,
@@ -91,12 +92,8 @@ impl DirectivesConfiguration {
 }
 
 impl Configuration for DirectivesConfiguration {
-    type Downloader = SimpleDownloader;
-    type Parser = Analyzer;
-    type Boundaries = DirectiveBoundaries;
-
-    fn downloader(&self) -> SimpleDownloader {
-        SimpleDownloader::new(
+    fn downloader(&self) -> Box<dyn Downloader> {
+        Box::new(SimpleDownloader::new(
             self.variables
                 .get_as_str(Variable::UserAgent)
                 .expect("bad val")
@@ -104,15 +101,15 @@ impl Configuration for DirectivesConfiguration {
             self.variables
                 .get_as_u64(Variable::MaxBodySize)
                 .expect("bad val") as usize,
-        )
+        ))
     }
 
-    fn parser(&self) -> Analyzer {
-        self.directives.analyzer()
+    fn parser(&self) -> Box<dyn Parser> {
+        Box::new(self.directives.analyzer())
     }
 
-    fn boundaries(&self) -> DirectiveBoundaries {
-        self.directives.boundaries()
+    fn boundaries(&self) -> Box<dyn Boundaries> {
+        Box::new(self.directives.boundaries())
     }
 
     fn seeds(&self) -> Vec<Url> {

@@ -14,8 +14,8 @@ pub struct Origin {
 }
 
 impl Origin {
-    async fn load<D: Downloader>(
-        downloader: &D,
+    async fn load(
+        downloader: &dyn Downloader,
         url_origin: UrlOrigin,
         default_requests_per_sec: f64,
     ) -> Origin {
@@ -80,11 +80,7 @@ impl Origins {
         }
     }
 
-    pub async fn get_origin_for_url<D: Downloader>(
-        &self,
-        downloader: &D,
-        url: &Url,
-    ) -> Arc<Origin> {
+    pub async fn get_origin_for_url(&self, downloader: &dyn Downloader, url: &Url) -> Arc<Origin> {
         let url_origin = url.origin();
         let origins = &self.origins[crate::hash(&url_origin) as usize % SEGMENT_SIZE];
 
