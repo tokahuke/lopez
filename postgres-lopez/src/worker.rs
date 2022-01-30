@@ -50,6 +50,11 @@ impl PostgresWorkerBackend {
 
 #[async_trait(?Send)]
 impl WorkerBackend for PostgresWorkerBackend {
+    async fn ensure_active(&self, _url: &Url) -> Result<(), anyhow::Error> {
+        // TODO
+        Ok(())
+    }
+
     async fn ensure_analyzed(
         &self,
         url: &Url,

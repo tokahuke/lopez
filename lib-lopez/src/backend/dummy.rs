@@ -66,6 +66,10 @@ impl MasterBackend for DummyMasterBackend {
         panic!("cannot use DummyMasterBackend");
     }
 
+    async fn exists_taken(&mut self) -> Result<bool, anyhow::Error> {
+        panic!("cannot use DummyMasterBackend");
+    }
+
     async fn fetch(
         &mut self,
         _batch_size: i64,
@@ -85,6 +89,10 @@ impl WorkerBackendFactory for DummyWorkerBackendFactory {
 
 #[async_trait(?Send)]
 impl WorkerBackend for DummyWorkerBackend {
+    async fn ensure_active(&self, _url: &Url) -> Result<(), anyhow::Error> {
+        panic!("cannot use DummyWorkerBackend");
+    }
+
     async fn ensure_analyzed(
         &self,
         _url: &Url,

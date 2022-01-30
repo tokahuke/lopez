@@ -10,7 +10,7 @@ disallow "^https://github\.com/tokahuke/lopez/(:?blob|raw|commits?|blame|tree|re
 seed "https://github.com/tokahuke/lopez";
 
 // set a quota of 500 pages only (you can try with more later...)
-set quota = 500;
+set quota = 100;
 
 // Now, let's make some "very interesting analysis":
 

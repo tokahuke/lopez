@@ -62,6 +62,8 @@ macro_rules! cli_impl {
                 /// The URL to be used for testing.
                 #[structopt(env)]
                 test_url: String,
+                #[structopt(flatten)]
+                profile: Profile,
             },
             /// Runs the page rank algorithm on the supplied wave.
             PageRank {
@@ -120,6 +122,9 @@ pub struct Profile {
     /// quota` set-variable, which is a limit at the _crawl level_.
     #[structopt(long, env)]
     pub max_quota: Option<usize>,
+    /// The default web driver location.
+    #[structopt(long, default_value = "http://localhost:4444", env)]
+    pub webdriver: String,
 }
 
 impl Default for Profile {
@@ -132,6 +137,7 @@ impl Default for Profile {
             log_stats_every_secs: 2.0,
             batch_size: 1024,
             max_quota: None,
+            webdriver: "http://localhost:4444".to_owned(),
         }
     }
 }

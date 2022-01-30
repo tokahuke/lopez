@@ -15,7 +15,7 @@ url = { version = "2.2.2", features = ["serde"] }
 http = "0.2.6"
 libflate = "1.1.1"
 robots_txt = "0.7.0"
-tarpc = {version = "0.27.2", features = ["tokio1", "tcp", "serde-transport", "serde-transport-bincode"] }
+tarpc = {version = "0.27.2", features = ["tokio1", "tcp", "serde-transport", "serde-transport-json"] }
 
 # Runtime:
 futures = "0.3.19"
@@ -53,3 +53,4 @@ anyhow = "1.0.53"
 rand = "0.8.4"
 serde_with = "1.11.0"
 thiserror = "1.0.30"
+fantoccini = { version = "0.18.0", default-features = false, features = ["rustls-tls"] }

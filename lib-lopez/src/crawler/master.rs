@@ -6,9 +6,9 @@ use url::Url;
 use crate::backend::{Backend, PageRanker, WorkerBackendFactory};
 use crate::cli::Profile;
 
-use super::counter::log_stats;
+// use super::diagnostics::log_stats;
 use super::worker::{WorkerHandler, WorkerHandlerFactory, WorkerId};
-use super::{Configuration, Counter, CrawlWorker, TestRunReport};
+use super::{Configuration, CrawlWorker, TestRunReport};
 
 pub struct CrawlMaster<B, WHF> {
     configuration: Arc<dyn Configuration>,
@@ -33,6 +33,7 @@ where
         }
     }
 
+    /// TODO ned refactoring
     pub async fn start(mut self, profile: Arc<Profile>) -> Result<(), anyhow::Error> {
         // Set panics to be logged:
         crate::panic::log_panics();
@@ -45,9 +46,6 @@ where
         let worker_backend_factory: Arc<dyn WorkerBackendFactory> =
             self.backend.build_worker_factory(wave_id).into();
 
-        // Creates a counter to get stats:
-        let counter = Arc::new(Counter::default());
-
         // Calculation of how many pages to crawl, after all:
         let consumed = master_model.count_crawled().await?;
         let crawl_quota = parameters.quota;
@@ -57,16 +55,15 @@ where
         let will_crawl_end = crawl_quota <= max_quota;
         let remaining_quota = (effective_quota).saturating_sub(consumed);
 
-        // Spawn task that will log stats from time to time:
-        tokio::spawn(log_stats(
-            counter.clone(),
-            consumed,
-            effective_quota,
-            profile.clone(),
-        ));
+        // // Spawn task that will log stats from time to time:
+        // tokio::spawn(log_stats(
+        //     counter.clone(),
+        //     consumed,
+        //     effective_quota,
+        //     profile.clone(),
+        // ));
 
         let crawl_profile = &profile;
-        let crawl_counter = &counter;
         let crawl_configuration = &self.configuration;
         let worker_handler_factory = &self.worker_handler_factory;
         let mut handlers = futures::stream::iter(0..profile.workers)
@@ -75,7 +72,6 @@ where
                     crawl_configuration.clone(),
                     worker_backend_factory.clone(),
                     crawl_profile.clone(),
-                    crawl_counter.clone(),
                     worker_id as WorkerId,
                 )
             })
@@ -108,7 +104,6 @@ where
 
         // And now, do the thing!
         let mut n_sent = 0;
-        let mut has_been_empty = false;
         let mut is_interrupted = false;
 
         if remaining_quota == 0 {
@@ -128,32 +123,28 @@ where
                 Ok(mut batch) => {
                     // TODO this is most probably buggy in a very, very clever way...
                     if batch.is_empty() {
-                        // If everything sent is done (or error), then... go away!
-                        if n_sent == counter.n_closed() {
-                            if has_been_empty {
-                                log::info!(
-                                    "number of sents and dones are equal and the queue \
-                                     has been empty. I think we are done..."
-                                );
+                        // Check if there is still stuff running.
+                        match master_model.exists_taken().await {
+                            Ok(false) => {
+                                log::info!("no taken urls exists. Crawl ended");
                                 break 'master;
-                            } else {
-                                // Better give one more chance, just to be sure.
-                                has_been_empty = true;
+                            }
+                            Ok(true) => {
+                                // spin!
+                                time::sleep(Duration::from_secs(1)).await;
+                                continue 'master;
+                            }
+                            Err(error) => {
+                                log::error!("error while polling taken: {}", error);
+                                break 'master;
                             }
                         }
-
-                        // This mitigates a spin lock here.
-                        time::sleep(Duration::from_secs(1)).await;
-                        continue 'master;
-                    } else {
-                        // "Cancel the Apocalypse..."
-                        has_been_empty = false;
                     }
 
                     batch.sort_unstable_by_key(|(_, depth)| *depth);
 
                     // Round robin:
-                    '_dispatch: for (url, depth) in batch {
+                    for (url, depth) in batch {
                         let chosen = crate::hash(&url.origin()) as usize % handlers.len();
 
                         if handlers[chosen].send_task(url, depth).await.is_err() {
@@ -163,11 +154,29 @@ where
                         } else {
                             n_sent += 1;
                         }
+                    }
 
-                        // Stop if quota is reached:
-                        if counter.n_closed() >= remaining_quota {
-                            log::info!("quota of {} reached", remaining_quota + consumed);
-                            break 'master;
+                    // Stop if quota is reached:
+                    if n_sent >= remaining_quota {
+                        log::info!("quota of {} reached", remaining_quota + consumed);
+
+                        // Await completion:
+                        'await_completion: loop {
+                            match master_model.exists_taken().await {
+                                Ok(false) => {
+                                    log::info!("no taken urls exists. Crawl ended");
+                                    break 'master;
+                                }
+                                Ok(true) => {
+                                    // spin!
+                                    tokio::time::sleep(Duration::from_secs(1)).await;
+                                    continue 'await_completion;
+                                }
+                                Err(error) => {
+                                    log::error!("error while polling taken: {}", error);
+                                    break 'master;
+                                }
+                            }
                         }
                     }
                 }
@@ -225,16 +234,8 @@ where
             .build_worker_factory(master_model.wave_id())
             .into();
 
-        // Creates a counter to get stats:
-        let counter = Arc::new(Counter::default());
-
-        CrawlWorker::new(
-            self.configuration.as_ref(),
-            worker_backend_factory,
-            counter,
-            profile,
-        )
-        .test_url(url)
-        .await
+        CrawlWorker::new(self.configuration.as_ref(), worker_backend_factory, profile)
+            .test_url(url)
+            .await
     }
 }

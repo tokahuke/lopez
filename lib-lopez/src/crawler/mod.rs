@@ -1,17 +1,20 @@
 //! The crawler façade.
 
 mod boundaries;
-mod counter;
+// mod counter;
 mod downloader;
 mod master;
 mod parser;
 mod reason;
 mod robots;
 mod worker;
+// mod diagnostics;
 
 pub use self::boundaries::{Boundaries, DummyBoundaries};
-pub use self::counter::Counter;
-pub use self::downloader::{Downloader, DummyDownloader, SimpleDownloader};
+// pub use self::counter::Counter;
+pub use self::downloader::{
+    Downloaded, Downloader, DummyDownloader, SimpleDownloader, WebDriverDownloader,
+};
 pub use self::master::CrawlMaster;
 pub use self::parser::{DummyParser, Parsed, Parser};
 pub use self::reason::Reason;
@@ -75,32 +78,3 @@ impl Configuration for DummyConfiguration {
         panic!("cannot use DummyConfiguration")
     }
 }
-
-// pub struct DynConfiguration;
-
-// impl Configuration for DynConfiguration {
-
-//     fn downloader(&self) -> Self::Downloader {
-//         Box::new(DummyDownloader)
-//     }
-
-//     fn parser(&self) -> Self::Parser {
-//         Box::new(DummyParser)
-//     }
-
-//     fn boundaries(&self) -> Self::Boundaries {
-//         Box::new(DummyBoundaries)
-//     }
-
-//     fn seeds(&self) -> Vec<Url> {
-//         panic!("cannot use DummyConfiguration")
-//     }
-
-//     fn analyzes(&self) -> Vec<(String, Type)> {
-//         panic!("cannot use DummyConfiguration")
-//     }
-
-//     fn parameters(&self) -> Parameters {
-//         panic!("cannot use DummyConfiguration")
-//     }
-// }

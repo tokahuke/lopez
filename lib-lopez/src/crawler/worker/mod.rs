@@ -18,7 +18,7 @@ use super::boundaries::Boundaries;
 use super::downloader::{Downloaded, Downloader};
 use super::parser::{Parsed, Parser};
 use super::Configuration;
-use super::Counter;
+// use super::Counter;
 use super::Parameters;
 use super::Reason;
 
@@ -29,6 +29,7 @@ pub type WorkerId = u64;
 #[async_trait]
 pub trait WorkerHandler {
     async fn send_task(&mut self, url: Url, depth: u16) -> Result<(), ()>;
+    // async fn get_counter(&self) -> Arc<Counter>;
     async fn terminate(self);
 }
 
@@ -40,7 +41,6 @@ pub trait WorkerHandlerFactory {
         configuration: Arc<dyn Configuration>,
         worker_backend_factory: Arc<dyn WorkerBackendFactory>,
         profile: Arc<Profile>,
-        counter: Arc<Counter>,
         worker_id: WorkerId,
     ) -> Result<Self::Handler, anyhow::Error>;
 }
@@ -55,18 +55,18 @@ impl WorkerHandlerFactory for LocalHandlerFactory {
         configuration: Arc<dyn Configuration>,
         worker_backend_factory: Arc<dyn WorkerBackendFactory>,
         profile: Arc<Profile>,
-        counter: Arc<Counter>,
         worker_id: WorkerId,
     ) -> Result<Self::Handler, anyhow::Error> {
+        // let counter = Arc::new(Counter::default());
         let (sender, canceler) =
-            CrawlWorker::new(&*configuration, worker_backend_factory, counter, profile)
-                .run(worker_id);
+            CrawlWorker::new(&*configuration, worker_backend_factory, profile).run(worker_id);
 
         Ok(LocalHandler { sender, canceler })
     }
 }
 
 pub struct LocalHandler {
+    // counter: Arc<Counter>,
     sender: mpsc::Sender<(Url, u16)>,
     canceler: Canceler,
 }
@@ -76,6 +76,10 @@ impl WorkerHandler for LocalHandler {
     async fn send_task(&mut self, url: Url, depth: u16) -> Result<(), ()> {
         self.sender.send((url, depth)).await.map_err(|_| ())
     }
+
+    // async fn get_counter(&self) -> Arc<Counter> {
+    //     self.counter.clone()
+    // }
 
     async fn terminate(self) {
         self.canceler.cancel().await
@@ -164,7 +168,7 @@ pub struct CrawlWorker {
     downloader: Box<dyn Downloader>,
     parser: Box<dyn Parser>,
     boundaries: Box<dyn Boundaries>,
-    task_counter: Arc<Counter>,
+    // task_counter: Arc<Counter>,
     profile: Arc<Profile>,
     worker_backend_factory: Arc<dyn WorkerBackendFactory>,
     parameters: Parameters,
@@ -174,13 +178,13 @@ impl CrawlWorker {
     pub fn new(
         configuration: &dyn Configuration,
         worker_backend_factory: Arc<dyn WorkerBackendFactory>,
-        task_counter: Arc<Counter>,
+        // task_counter: Arc<Counter>,
         profile: Arc<Profile>,
     ) -> CrawlWorker {
         let parameters = configuration.parameters();
         CrawlWorker {
             downloader: configuration.downloader(),
-            task_counter,
+            // task_counter,
             profile,
             parser: configuration.parser(),
             boundaries: configuration.boundaries(),
@@ -262,37 +266,30 @@ impl CrawlWorker {
                 location,
             } => match checked_join(page_url, &location) {
                 Ok(location) => {
-                    if !self.boundaries.is_frontier(page_url)
+                    let links = if !self.boundaries.is_frontier(page_url)
                         && self.boundaries.is_allowed(&location)
                     {
-                        worker_backend
-                            .ensure_explored(
-                                page_url,
-                                status_code,
-                                depth + 1,
-                                vec![(
-                                    Reason::Redirect,
-                                    self.boundaries.clean_query_params(location),
-                                )],
-                            )
-                            .await?;
-                    }
+                        vec![(
+                            Reason::Redirect,
+                            self.boundaries.clean_query_params(location),
+                        )]
+                    } else {
+                        vec![]
+                    };
+
+                    worker_backend
+                        .ensure_explored(page_url, status_code, depth + 1, links)
+                        .await?;
                 }
-                Err(err) => log::debug!("at {}: {}", page_url, err),
+                Err(error) => return Err(anyhow::anyhow!("at {}: {}", page_url, error)),
             },
             Crawled::Error(error) => {
-                log::debug!("at {} got: {}", page_url, error);
                 worker_backend.ensure_error(page_url).await?;
-
-                // This needs to be the last thing (because of `?`).
-                self.task_counter.register_error();
+                return Err(anyhow::anyhow!("at {} got: {}", page_url, error));
             }
             Crawled::TimedOut => {
-                log::debug!("at {}: got timeout", page_url);
                 worker_backend.ensure_error(page_url).await?;
-
-                // This needs to be the last thing (because of `?`).
-                self.task_counter.register_error();
+                return Err(anyhow::anyhow!("at {}: got timeout", page_url));
             }
         }
 
@@ -306,6 +303,9 @@ impl CrawlWorker {
         page_url: &Url,
         depth: u16,
     ) -> Result<(), anyhow::Error> {
+        // Register open task:
+        worker_backend.ensure_active(&page_url).await?;
+
         // Get origin:
         let origin = origins
             .get_origin_for_url(&*self.downloader, &page_url)
@@ -320,9 +320,7 @@ impl CrawlWorker {
         origin.block().await;
 
         // Then, you crawl:
-        self.task_counter.inc_active();
         let crawled = self.crawl(page_url).await;
-        self.task_counter.dec_active();
 
         // Finally, you store!
         self.store(worker_backend, page_url, depth, crawled).await?;
@@ -360,9 +358,6 @@ impl CrawlWorker {
                 .for_each_concurrent(
                     Some(max_tasks_per_worker),
                     move |(i, (page_url, depth)): (_, (Url, _))| async move {
-                        // Register open task:
-                        worker_ref.task_counter.register_open();
-
                         // Run the task:
                         let result = worker_ref
                             .crawl_task(
@@ -373,12 +368,8 @@ impl CrawlWorker {
                             )
                             .await;
 
-                        // Register close, no matter the status.
-                        worker_ref.task_counter.register_closed();
-
                         // Now, analyze results:
                         if let Err(error) = result {
-                            worker_ref.task_counter.register_error();
                             log::debug!("while crawling `{}` got: {}", page_url, error);
                         }
                     },

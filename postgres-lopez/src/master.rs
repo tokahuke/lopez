@@ -11,6 +11,7 @@ const CREATE_ANALYSES: &str = include_str!("sql/create_analyses.sql");
 const RESET_QUEUE: &str = include_str!("sql/reset_queue.sql");
 const FETCH: &str = include_str!("sql/fetch.sql");
 const COUNT_CRAWLED: &str = include_str!("sql/count_crawled.sql");
+const EXISTS_TAKEN: &str = include_str!("sql/exists_taken.sql");
 
 pub struct PostgresMasterBackend {
     client: Rc<Client>,
@@ -19,6 +20,7 @@ pub struct PostgresMasterBackend {
     ensure_names: Statement,
     create_analyses: Statement,
     reset_queue: Statement,
+    exists_taken: Statement,
     fetch: Statement,
     count_crawled: Statement,
 }
@@ -34,6 +36,7 @@ impl PostgresMasterBackend {
         let ensure_names = client.prepare(ENSURE_NAMES).await?;
         let create_analyses = client.prepare(CREATE_ANALYSES).await?;
         let reset_queue = client.prepare(RESET_QUEUE).await?;
+        let exists_taken = client.prepare(EXISTS_TAKEN).await?;
         let fetch = client.prepare(FETCH).await?;
         let count_crawled = client.prepare(COUNT_CRAWLED).await?;
 
@@ -53,6 +56,7 @@ impl PostgresMasterBackend {
             ensure_names,
             create_analyses,
             reset_queue,
+            exists_taken,
             fetch,
             count_crawled,
         })
@@ -119,6 +123,20 @@ impl MasterBackend for PostgresMasterBackend {
         self.client.execute(&self.reset_queue, &[&wave_id]).await?;
 
         Ok(())
+    }
+
+    async fn exists_taken(&mut self) -> Result<bool, anyhow::Error> {
+        let wave_id = self.wave_id;
+        let exists_taken = self
+            .client
+            .query(&self.exists_taken, &[&wave_id])
+            .await?
+            .into_iter()
+            .map(|row| row.get::<_, bool>("exists_taken"))
+            .next()
+            .expect("always retrns a row");
+
+        Ok(exists_taken)
     }
 
     async fn fetch(

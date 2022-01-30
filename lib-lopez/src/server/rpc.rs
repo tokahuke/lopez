@@ -12,8 +12,7 @@ use url::Url;
 
 use crate::backend::WorkerBackendFactory;
 use crate::crawler::{
-    Configuration, Counter, LocalHandler, LocalHandlerFactory, WorkerHandler, WorkerHandlerFactory,
-    WorkerId,
+    Configuration, LocalHandler, LocalHandlerFactory, WorkerHandler, WorkerHandlerFactory, WorkerId,
 };
 use crate::Profile;
 
@@ -46,7 +45,6 @@ pub trait CrawlerRpc {
         configuration: Arc<dyn Configuration>,
         worker_backend_factory: Arc<dyn WorkerBackendFactory>,
         profile: Arc<Profile>,
-        counter: Arc<Counter>,
         worker_id: WorkerId,
     ) -> Result<RemoteWorkerId, RpcError>;
     async fn send_task(
@@ -87,7 +85,6 @@ impl CrawlerRpc for CrawlerRpcServer {
         configuration: Arc<dyn Configuration>,
         worker_backend_factory: Arc<dyn WorkerBackendFactory>,
         profile: Arc<Profile>,
-        counter: Arc<Counter>,
         worker_id: WorkerId,
     ) -> Self::BuildWorkerFut {
         Box::pin(async move {
@@ -96,13 +93,7 @@ impl CrawlerRpc for CrawlerRpcServer {
             }
 
             let local_handler = LocalHandlerFactory
-                .build(
-                    configuration,
-                    worker_backend_factory,
-                    profile,
-                    counter,
-                    worker_id,
-                )
+                .build(configuration, worker_backend_factory, profile, worker_id)
                 .await
                 .expect("local handlers always succeed");
 
@@ -168,7 +159,7 @@ impl CrawlerRpc for CrawlerRpcServer {
 pub async fn connect(server_addr: SocketAddr) -> Result<Arc<CrawlerRpcClient>, anyhow::Error> {
     let transport = tarpc::serde_transport::tcp::connect(
         server_addr,
-        tarpc::tokio_serde::formats::Bincode::default,
+        tarpc::tokio_serde::formats::Json::default,
     )
     .await?;
     let connection = CrawlerRpcClient::new(tarpc::client::Config::default(), transport).spawn();
@@ -182,12 +173,12 @@ pub async fn serve(
     server_addr: SocketAddr,
 ) -> Result<(), anyhow::Error> {
     log::info!("Server starting at {server_addr}");
-    
+
     let inner = Arc::new(CrawlerRpcServerInner::new(token));
 
     let listener = tarpc::serde_transport::tcp::listen(
         server_addr,
-        tarpc::tokio_serde::formats::Bincode::default,
+        tarpc::tokio_serde::formats::Json::default,
     )
     .await?;
 

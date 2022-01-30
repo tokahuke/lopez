@@ -13,7 +13,7 @@ use crate::Type;
 
 use super::expressions::AggregatorExpressionState;
 use super::expressions::Error;
-use super::parse::{Boundary, Item, RuleSet};
+use super::parse::{Boundary, Item, RuleSet, WebDriver};
 use super::variable::{SetVariables, Variable};
 
 const SEPARATOR: &str = ".";
@@ -508,6 +508,25 @@ impl Directives {
 
         SetVariables { set_variables }
     }
+
+    pub fn webdriver_selector(&self) -> WebDriverSelector {
+        let rules = self
+            .modules
+            .iter()
+            .flat_map(|(_module_name, module)| {
+                module.items.iter().filter_map(move |item| {
+                    if let Item::WebDriver(web_driver) = item {
+                        Some(web_driver)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        WebDriverSelector { rules }
+    }
 }
 
 #[derive(Debug)]
@@ -592,5 +611,18 @@ impl Analyzer {
                 })
             })
             .collect()
+    }
+}
+
+#[derive(Debug)]
+pub struct WebDriverSelector {
+    rules: Vec<WebDriver>,
+}
+
+impl WebDriverSelector {
+    pub fn use_webdriver(&self, page_url: &Url) -> bool {
+        self.rules
+            .iter()
+            .any(|rule| rule.regex.is_match(page_url.as_str()))
     }
 }

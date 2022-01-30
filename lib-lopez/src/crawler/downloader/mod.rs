@@ -1,3 +1,5 @@
+mod web_driver;
+
 use async_trait::async_trait;
 use futures::StreamExt;
 use http::StatusCode;
@@ -9,6 +11,8 @@ use libflate::gzip::Decoder as GzipDecoder;
 use std::io::Read;
 use std::pin::Pin;
 use url::Url;
+
+pub use self::web_driver::WebDriverDownloader;
 
 pub enum Downloaded {
     Page {
@@ -37,13 +41,6 @@ impl Downloader for DummyDownloader {
         panic!("cannot use DummyDownloader")
     }
 }
-
-// #[async_trait]
-// impl Downloader for Box<dyn Downloader> {
-//     async fn download(&self, page_url: &Url) -> Result<Downloaded, anyhow::Error> {
-//         self.as_ref().download(page_url).await
-//     }
-// }
 
 pub struct SimpleDownloader {
     user_agent: String,

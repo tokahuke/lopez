@@ -14,18 +14,21 @@ mod variable;
 pub use self::directives::Directives;
 pub use self::error::Error;
 
+use async_trait::async_trait;
 use lazy_static::lazy_static;
 use scraper::Html;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
+use std::sync::Arc;
 
 use crate::crawler::{
-    Boundaries, Configuration, Downloader, Parameters, Parsed, Parser, Reason, SimpleDownloader,
+    Boundaries, Configuration, Downloaded, Downloader, Parameters, Parsed, Parser, Reason,
+    SimpleDownloader, WebDriverDownloader,
 };
-use crate::Type;
+use crate::{Type, Profile};
 
-use self::directives::{Analyzer, Boundaries as DirectiveBoundaries};
+use self::directives::{Analyzer, Boundaries as DirectiveBoundaries, WebDriverSelector};
 use self::extractor::Extractor;
 use self::selector::Selector;
 use self::variable::{SetVariables, Variable};
@@ -84,13 +87,15 @@ impl Boundaries for DirectiveBoundaries {
 pub struct DirectivesConfiguration {
     directives: Directives,
     variables: SetVariables,
+    profile: Arc<Profile>,
 }
 
 impl DirectivesConfiguration {
-    pub fn new(directives: Directives) -> DirectivesConfiguration {
+    pub fn new(directives: Directives, profile: Arc<Profile>) -> DirectivesConfiguration {
         DirectivesConfiguration {
             variables: directives.set_variables(),
             directives,
+            profile,
         }
     }
 }
@@ -98,15 +103,21 @@ impl DirectivesConfiguration {
 #[typetag::serde]
 impl Configuration for DirectivesConfiguration {
     fn downloader(&self) -> Box<dyn Downloader> {
-        Box::new(SimpleDownloader::new(
-            self.variables
-                .get_as_str(Variable::UserAgent)
-                .expect("bad val")
-                .to_owned(),
-            self.variables
-                .get_as_u64(Variable::MaxBodySize)
-                .expect("bad val") as usize,
-        ))
+        let user_agent = self
+            .variables
+            .get_as_str(Variable::UserAgent)
+            .expect("bad val")
+            .to_owned();
+        let max_body_size = self
+            .variables
+            .get_as_u64(Variable::MaxBodySize)
+            .expect("bad val") as usize;
+
+        Box::new(SelectiveDownloader {
+            simple: SimpleDownloader::new(user_agent.clone(), max_body_size),
+            webdriver: WebDriverDownloader::new(self.profile.webdriver.clone(), user_agent),
+            selector: self.directives.webdriver_selector(),
+        })
     }
 
     fn parser(&self) -> Box<dyn Parser> {
@@ -144,6 +155,23 @@ impl Configuration for DirectivesConfiguration {
                 .variables
                 .get_as_bool(Variable::EnablePageRank)
                 .expect("bad val"),
+        }
+    }
+}
+
+pub struct SelectiveDownloader {
+    simple: SimpleDownloader,
+    webdriver: WebDriverDownloader,
+    selector: WebDriverSelector,
+}
+
+#[async_trait]
+impl Downloader for SelectiveDownloader {
+    async fn download(&self, page_url: &Url) -> Result<Downloaded, anyhow::Error> {
+        if self.selector.use_webdriver(page_url) {
+            self.webdriver.download(page_url).await
+        } else {
+            self.simple.download(page_url).await
         }
     }
 }

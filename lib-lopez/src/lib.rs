@@ -125,11 +125,14 @@ macro_rules! main {
                 LopezApp::Test {
                     source,
                     test_url,
+                    profile,
                 } => {
                     // Conditionally init logging:
                     if cli.verbose {
                         $crate::init_logger(cli.verbose);
                     }
+
+                    let profile = Arc::new(profile);
 
                     match Url::parse(&test_url) {
                         // TODO: (known issue) structured output messes the expected return status...
@@ -154,11 +157,18 @@ macro_rules! main {
                                 }
                                 Ok(directives) => {
                                     let directives = directives;
-                                    let configuration = $crate::DirectivesConfiguration::new(directives);
-                                    let crawl_master = $crate::CrawlMaster::new(configuration, $crate::backend::DummyBackend::default(), $crate::LocalHandlerFactory);
+                                    let configuration = $crate::DirectivesConfiguration::new(
+                                        directives,
+                                        profile.clone()
+                                    );
+                                    let crawl_master = $crate::CrawlMaster::new(
+                                        configuration,
+                                        $crate::backend::DummyBackend::default(),
+                                        $crate::LocalHandlerFactory
+                                    );
 
                                     // Create report:
-                                    let report = crawl_master.test_url(Arc::new(Profile::default()), url)
+                                    let report = crawl_master.test_url(profile, url)
                                         .await;
 
                                     // Show report:
@@ -184,9 +194,11 @@ macro_rules! main {
                     // Init logging:
                     $crate::init_logger(cli.verbose);
 
+                    let profile = Arc::new(profile);
+
                     // Open directives:
                     let directives = Directives::load(source, cli.import_path)?;
-                    let configuration = $crate::DirectivesConfiguration::new(directives);
+                    let configuration = $crate::DirectivesConfiguration::new(directives, profile.clone());
 
                     // Create backend:
                     let backend = <$backend_ty>::init(config, &wave_name).await?;
@@ -198,7 +210,7 @@ macro_rules! main {
                                 configuration,
                                 backend,
                                 $crate::LocalHandlerFactory
-                            ).start(Arc::new(profile)).await?
+                            ).start(profile).await?
                         },
                         $crate::Mode::Cluster { token, pool, max_retries } => {
                             $crate::CrawlMaster::new(
@@ -209,7 +221,7 @@ macro_rules! main {
                                     max_retries,
                                     &pool
                                 ).await?,
-                            ).start(Arc::new(profile)).await?
+                            ).start(profile).await?
                         }
                     };
 

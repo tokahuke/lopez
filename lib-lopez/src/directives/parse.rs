@@ -621,6 +621,20 @@ fn set_variable_test() {
     );
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebDriver {
+    #[serde(with = "serde_regex")]
+    pub regex: regex::Regex,
+}
+
+fn web_driver(i: &str) -> IResult<&str, Result<WebDriver, String>> {
+    map(string_directive(&["use", "webdriver", "on"]), |parsed| {
+        Ok(WebDriver {
+            regex: regex(&parsed)?,
+        })
+    })(i)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum Item {
@@ -629,6 +643,7 @@ pub enum Item {
     Module(Module),
     RuleSet(Arc<RuleSet>),
     SetVariable(SetVariable),
+    WebDriver(WebDriver),
 }
 
 fn item(i: &str) -> IResult<&str, Result<Item, String>> {
@@ -640,6 +655,7 @@ fn item(i: &str) -> IResult<&str, Result<Item, String>> {
         map(set_variable, |set_variable| {
             Ok(Item::SetVariable(set_variable))
         }),
+        map(web_driver, |web_driver| Ok(Item::WebDriver(web_driver?))),
     ))(i)
 }
 

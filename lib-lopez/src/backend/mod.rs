@@ -67,6 +67,7 @@ pub trait MasterBackend {
     async fn create_analyses(&mut self, analyses: &[(String, Type)]) -> Result<(), anyhow::Error>;
     async fn count_crawled(&mut self) -> Result<usize, anyhow::Error>;
     async fn reset_queue(&mut self) -> Result<(), anyhow::Error>;
+    async fn exists_taken(&mut self) -> Result<bool, anyhow::Error>;
     async fn fetch(
         &mut self,
         batch_size: i64,
@@ -82,6 +83,8 @@ pub trait WorkerBackendFactory: 'static + Send + Sync + Debug {
 
 #[async_trait(?Send)]
 pub trait WorkerBackend {
+    async fn ensure_active(&self, url: &Url) -> Result<(), anyhow::Error>;
+
     async fn ensure_analyzed(
         &self,
         url: &Url,

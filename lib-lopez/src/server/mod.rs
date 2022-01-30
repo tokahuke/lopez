@@ -6,13 +6,22 @@ use async_trait::async_trait;
 use futures::prelude::*;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+use tarpc::context::{self, Context};
 use url::Url;
 
 use crate::backend::WorkerBackendFactory;
-use crate::crawler::{Configuration, Counter, WorkerHandler, WorkerHandlerFactory, WorkerId};
+use crate::crawler::{Configuration, WorkerHandler, WorkerHandlerFactory, WorkerId};
 use crate::Profile;
 
 use self::rpc::{RemoteWorkerId, Token};
+
+fn context() -> Context {
+    let mut ctx = context::current();
+    // Biiig deadline...
+    ctx.deadline = SystemTime::now() + Duration::from_secs(150);
+    ctx
+}
 
 pub struct RemoteWorkerHandlerFactory {
     token: Token,
@@ -49,7 +58,6 @@ impl WorkerHandlerFactory for RemoteWorkerHandlerFactory {
         configuration: Arc<dyn Configuration>,
         worker_backend_factory: Arc<dyn WorkerBackendFactory>,
         profile: Arc<Profile>,
-        counter: Arc<Counter>,
         worker_id: WorkerId,
     ) -> Result<Self::Handler, anyhow::Error> {
         let client = self.pool[worker_id as usize % self.pool.len()].clone();
@@ -57,12 +65,11 @@ impl WorkerHandlerFactory for RemoteWorkerHandlerFactory {
 
         let remote_worker_id = client
             .build_worker(
-                tarpc::context::current(),
+                context(),
                 self.token.clone(),
                 configuration,
                 worker_backend_factory,
                 profile,
-                counter,
                 worker_id,
             )
             .await??;
@@ -92,7 +99,7 @@ impl WorkerHandler for RemoteWorkerHandler {
             let outcome = self
                 .client
                 .send_task(
-                    tarpc::context::current(),
+                    context(),
                     self.token.clone(),
                     self.remote_worker_id,
                     url.clone(),
@@ -109,6 +116,7 @@ impl WorkerHandler for RemoteWorkerHandler {
                 Err(err) => {
                     log::warn!("RPC transport error ({retry}/{}): {err}", self.max_retries);
                     retry += 1;
+                    tokio::task::yield_now().await;
                 }
             }
         }
@@ -122,11 +130,7 @@ impl WorkerHandler for RemoteWorkerHandler {
         while retry <= self.max_retries {
             let outcome = self
                 .client
-                .terminate(
-                    tarpc::context::current(),
-                    self.token.clone(),
-                    self.remote_worker_id,
-                )
+                .terminate(context(), self.token.clone(), self.remote_worker_id)
                 .await;
 
             match outcome {
@@ -138,6 +142,7 @@ impl WorkerHandler for RemoteWorkerHandler {
                 Err(err) => {
                     log::warn!("RPC transport error ({retry}/{}): {err}", self.max_retries);
                     retry += 1;
+                    tokio::task::yield_now().await;
                 }
             }
         }

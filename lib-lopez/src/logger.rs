@@ -15,6 +15,7 @@ pub fn init_logger(is_verbose: bool) -> log4rs::Handle {
             .appender(Appender::builder().build("stderr", Box::new(console)))
             .logger(Logger::builder().build("rustls", log::LevelFilter::Error))
             .logger(Logger::builder().build("html5ever", log::LevelFilter::Error))
+            .logger(Logger::builder().build("tarpc", log::LevelFilter::Error))
             .build(
                 Root::builder()
                     .appender("stderr")
@@ -26,6 +27,7 @@ pub fn init_logger(is_verbose: bool) -> log4rs::Handle {
             .appender(Appender::builder().build("stderr", Box::new(console)))
             .logger(Logger::builder().build("rustls", log::LevelFilter::Off))
             .logger(Logger::builder().build("html5ever", log::LevelFilter::Error))
+            .logger(Logger::builder().build("tarpc", log::LevelFilter::Error))
             .build(
                 Root::builder()
                     .appender("stderr")
