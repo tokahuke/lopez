@@ -5,6 +5,7 @@ mod extractor;
 mod parse;
 mod parse_common;
 mod parse_utils;
+mod selector;
 mod variable;
 
 // Note on where to put parseable items: if it has an impl-block, it goes
@@ -14,7 +15,8 @@ pub use self::directives::Directives;
 pub use self::error::Error;
 
 use lazy_static::lazy_static;
-use scraper::{Html, Selector};
+use scraper::Html;
+use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
 
@@ -25,15 +27,17 @@ use crate::Type;
 
 use self::directives::{Analyzer, Boundaries as DirectiveBoundaries};
 use self::extractor::Extractor;
+use self::selector::Selector;
 use self::variable::{SetVariables, Variable};
 
 /// Finds all "hrefs" in an HTML and run all analyses.
 fn tree_search(html: &Html) -> Vec<(Reason, String)> {
     lazy_static! {
-        static ref ANCHOR: Selector =
-            Selector::parse("a").expect("failed to parse statics selector");
-        static ref CANONICAL: Selector =
-            Selector::parse("link[rel=\"canonical\"]").expect("failed to parse statics selector");
+        static ref ANCHOR: scraper::Selector =
+            scraper::Selector::parse("a").expect("failed to parse statics selector");
+        static ref CANONICAL: scraper::Selector =
+            scraper::Selector::parse("link[rel=\"canonical\"]")
+                .expect("failed to parse statics selector");
     }
 
     let anchors = html
@@ -76,7 +80,7 @@ impl Boundaries for DirectiveBoundaries {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DirectivesConfiguration {
     directives: Directives,
     variables: SetVariables,
@@ -91,6 +95,7 @@ impl DirectivesConfiguration {
     }
 }
 
+#[typetag::serde]
 impl Configuration for DirectivesConfiguration {
     fn downloader(&self) -> Box<dyn Downloader> {
         Box::new(SimpleDownloader::new(

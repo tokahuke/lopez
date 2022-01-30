@@ -26,7 +26,7 @@ impl PostgresWorkerBackend {
     pub(super) async fn init(
         client: Rc<Client>,
         wave_id: i32,
-    ) -> Result<PostgresWorkerBackend, crate::Error> {
+    ) -> Result<PostgresWorkerBackend, anyhow::Error> {
         // Prepare statements:
         let ensure_links = client.prepare(ENSURE_LINKS).await?;
         let ensure_analyzed = client.prepare(ENSURE_ANALYZED).await?;
@@ -50,13 +50,11 @@ impl PostgresWorkerBackend {
 
 #[async_trait(?Send)]
 impl WorkerBackend for PostgresWorkerBackend {
-    type Error = crate::Error;
-
     async fn ensure_analyzed(
         &self,
         url: &Url,
         analyses: Vec<(String, Value)>,
-    ) -> Result<(), crate::Error> {
+    ) -> Result<(), anyhow::Error> {
         let (analysis_names, results): (Vec<_>, Vec<_>) = analyses
             .into_iter()
             .map(|(name, result)| (name, tokio_postgres::types::Json(result)))
@@ -73,7 +71,7 @@ impl WorkerBackend for PostgresWorkerBackend {
         status_code: StatusCode,
         link_depth: u16,
         links: Vec<(Reason, Url)>,
-    ) -> Result<(), crate::Error> {
+    ) -> Result<(), anyhow::Error> {
         let wave_id = self.wave_id;
         let from_page_id = hash(&from_url.as_str());
         let (reasons, to_urls): (Vec<_>, Vec<_>) = links
@@ -104,7 +102,7 @@ impl WorkerBackend for PostgresWorkerBackend {
         Ok(())
     }
 
-    async fn ensure_error(&self, url: &Url) -> Result<(), crate::Error> {
+    async fn ensure_error(&self, url: &Url) -> Result<(), anyhow::Error> {
         let wave_id = self.wave_id;
         let page_id = hash(&url.as_str());
 
@@ -115,10 +113,3 @@ impl WorkerBackend for PostgresWorkerBackend {
         Ok(())
     }
 }
-
-// #[tokio::test]
-// async fn test_init_worker() {
-//     let connection = crate::db::connect().await.unwrap();
-//     let factory = PostgresWorkerBackendFactory::new(10);
-//     factory.build(connection).await.unwrap();
-// }

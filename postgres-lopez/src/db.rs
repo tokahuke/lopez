@@ -1,6 +1,7 @@
 use include_dir::Dir;
 use migrant_lib::migration::EmbeddedMigration;
 use migrant_lib::{Config, Migratable, Migrator, Settings};
+use serde_derive::{Deserialize, Serialize};
 use std::env;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -17,7 +18,7 @@ macro_rules! params {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Serialize, Deserialize)]
 pub struct DbConfig {
     /// The host name of the PostgreSQL server.
     #[structopt(long, env = "DB_HOST", default_value = "localhost")]
@@ -53,7 +54,7 @@ impl DbConfig {
             .unwrap_or_default()
     }
 
-    pub async fn connect(&self) -> Result<Rc<Client>, crate::Error> {
+    pub async fn connect(&self) -> Result<Rc<Client>, anyhow::Error> {
         // Connect to database:
         let (client, connection) = pg_connect(
             &format!(
@@ -79,7 +80,7 @@ impl DbConfig {
     }
 
     /// Ensures that the database exists.
-    pub async fn ensure_create_db(&self) -> Result<(), crate::Error> {
+    pub async fn ensure_create_db(&self) -> Result<(), anyhow::Error> {
         // Connect to database:
         let (client, connection) = pg_connect(
             &format!(
@@ -150,7 +151,7 @@ impl DbConfig {
     }
 
     /// Ensures all migrations are up-to-date.
-    pub async fn sync_migrations(self: Arc<Self>) -> Result<(), crate::Error> {
+    pub async fn sync_migrations(self: Arc<Self>) -> Result<(), migrant_lib::Error> {
         // Need to spawn blocking because a second runtime is inited by migrant
         // and Tokio is not happy with runtime within runtime.
         tokio::task::spawn_blocking(move || {

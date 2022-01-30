@@ -1,10 +1,11 @@
+use serde_derive::{Deserialize, Serialize};
 use std::fmt::{self, Display};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crate::cli::Profile;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Counter {
     /// All tasks in progress.
     open_count: AtomicUsize,

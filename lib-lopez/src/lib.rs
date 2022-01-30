@@ -14,18 +14,21 @@ mod panic;
 #[macro_use]
 mod cli;
 mod logger;
+mod server;
+
 pub mod pretty_print;
 pub mod r#type;
 
 pub use ansi_term;
 pub use anyhow;
-pub use cli::Profile;
+pub use cli::{Mode, Profile};
 pub use crawler::{CrawlMaster, DummyConfiguration, LocalHandlerFactory};
 pub use directives::{Directives, DirectivesConfiguration};
 pub use hash::hash;
 pub use logger::init_logger;
 pub use r#type::Type;
 pub use serde::Serialize;
+pub use server::{serve, RemoteWorkerHandlerFactory};
 pub use structopt::StructOpt;
 
 pub const fn default_user_agent() -> &'static str {
@@ -176,6 +179,7 @@ macro_rules! main {
                     wave_name,
                     config,
                     profile,
+                    mode,
                 } => {
                     // Init logging:
                     $crate::init_logger(cli.verbose);
@@ -188,15 +192,40 @@ macro_rules! main {
                     let backend = <$backend_ty>::init(config, &wave_name).await?;
 
                     // Do the thing!
-                    let crawl_master = $crate::CrawlMaster::new(
-                        configuration,
-                        backend,
-                        $crate::LocalHandlerFactory
-                    );
-                    crawl_master.start(Arc::new(profile)).await?;
+                    match mode.unwrap_or_default() {
+                        $crate::Mode::Local => {
+                            $crate::CrawlMaster::new(
+                                configuration,
+                                backend,
+                                $crate::LocalHandlerFactory
+                            ).start(Arc::new(profile)).await?
+                        },
+                        $crate::Mode::Cluster { token, pool, max_retries } => {
+                            $crate::CrawlMaster::new(
+                                configuration,
+                                backend,
+                                $crate::RemoteWorkerHandlerFactory::connect(
+                                    token,
+                                    max_retries,
+                                    &pool
+                                ).await?,
+                            ).start(Arc::new(profile)).await?
+                        }
+                    };
 
                     Ok(Some("crawl complete".to_owned()))
-                }
+                },
+                LopezApp::Serve { token, bind, max_connections } => {
+                    // Init logging:
+                    $crate::init_logger(cli.verbose);
+
+                    $crate::serve(token,
+                        max_connections,
+                        bind,
+                    ).await?;
+
+                    Ok(Some("server ended".to_owned()))
+                },
                 LopezApp::Rm {
                     ignore,
                     wave_name,

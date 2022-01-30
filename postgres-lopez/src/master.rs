@@ -27,7 +27,7 @@ impl PostgresMasterBackend {
     pub async fn init(
         client: Rc<Client>,
         wave: &str,
-    ) -> Result<PostgresMasterBackend, crate::Error> {
+    ) -> Result<PostgresMasterBackend, anyhow::Error> {
         // Prepare statements:
         let ensure_wave = client.prepare(ENSURE_WAVE).await?;
         let ensure_status = client.prepare(ENSURE_STATUS).await?;
@@ -61,13 +61,11 @@ impl PostgresMasterBackend {
 
 #[async_trait(?Send)]
 impl MasterBackend for PostgresMasterBackend {
-    type Error = crate::Error;
-
     fn wave_id(&mut self) -> i32 {
         self.wave_id
     }
 
-    async fn ensure_seeded(&mut self, seeds: &[Url]) -> Result<(), crate::Error> {
+    async fn ensure_seeded(&mut self, seeds: &[Url]) -> Result<(), anyhow::Error> {
         let wave_id = self.wave_id;
         let page_ids = seeds
             .iter()
@@ -91,7 +89,7 @@ impl MasterBackend for PostgresMasterBackend {
     async fn create_analyses(
         &mut self,
         analysis_names: &[(String, Type)],
-    ) -> Result<(), crate::Error> {
+    ) -> Result<(), anyhow::Error> {
         let (analysis_names, result_types): (Vec<_>, Vec<_>) = analysis_names
             .iter()
             .map(|(name, typ)| (name.to_owned(), typ.to_string()))
@@ -102,7 +100,7 @@ impl MasterBackend for PostgresMasterBackend {
         Ok(())
     }
 
-    async fn count_crawled(&mut self) -> Result<usize, crate::Error> {
+    async fn count_crawled(&mut self) -> Result<usize, anyhow::Error> {
         let wave_id = self.wave_id;
         let crawled = self
             .client
@@ -116,7 +114,7 @@ impl MasterBackend for PostgresMasterBackend {
         Ok(crawled)
     }
 
-    async fn reset_queue(&mut self) -> Result<(), crate::Error> {
+    async fn reset_queue(&mut self) -> Result<(), anyhow::Error> {
         let wave_id = self.wave_id;
         self.client.execute(&self.reset_queue, &[&wave_id]).await?;
 
@@ -127,7 +125,7 @@ impl MasterBackend for PostgresMasterBackend {
         &mut self,
         batch_size: i64,
         max_depth: i16,
-    ) -> Result<Vec<(Url, u16)>, crate::Error> {
+    ) -> Result<Vec<(Url, u16)>, anyhow::Error> {
         let batch = self
             .client
             .query(&self.fetch, &[&self.wave_id, &batch_size, &max_depth])
@@ -137,7 +135,7 @@ impl MasterBackend for PostgresMasterBackend {
                 Ok((
                     row.get::<_, String>("page_url").parse::<Url>()?,
                     row.get::<_, i16>("depth") as u16,
-                )) as Result<_, lib_lopez::Error>
+                )) as Result<_, anyhow::Error>
             })
             .filter_map(|url_and_depth| url_and_depth.ok())
             .collect::<Vec<_>>();

@@ -1,3 +1,5 @@
+mod origins;
+
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::future;
@@ -14,11 +16,13 @@ use crate::cli::Profile;
 
 use super::boundaries::Boundaries;
 use super::downloader::{Downloaded, Downloader};
-use super::origins::Origins;
 use super::parser::{Parsed, Parser};
 use super::Configuration;
 use super::Counter;
+use super::Parameters;
 use super::Reason;
+
+use self::origins::Origins;
 
 pub type WorkerId = u64;
 
@@ -28,42 +32,37 @@ pub trait WorkerHandler {
     async fn terminate(self);
 }
 
+#[async_trait]
 pub trait WorkerHandlerFactory {
     type Handler: WorkerHandler;
-    fn build(
+    async fn build(
         &self,
-        configuration: &dyn Configuration,
+        configuration: Arc<dyn Configuration>,
         worker_backend_factory: Arc<dyn WorkerBackendFactory>,
         profile: Arc<Profile>,
         counter: Arc<Counter>,
-        origins: Arc<Origins>,
         worker_id: WorkerId,
-    ) -> Self::Handler;
+    ) -> Result<Self::Handler, anyhow::Error>;
 }
 
 pub struct LocalHandlerFactory;
 
+#[async_trait]
 impl WorkerHandlerFactory for LocalHandlerFactory {
     type Handler = LocalHandler;
-    fn build(
+    async fn build(
         &self,
-        configuration: &dyn Configuration,
+        configuration: Arc<dyn Configuration>,
         worker_backend_factory: Arc<dyn WorkerBackendFactory>,
         profile: Arc<Profile>,
         counter: Arc<Counter>,
-        origins: Arc<Origins>,
         worker_id: WorkerId,
-    ) -> Self::Handler {
-        let (sender, canceler) = CrawlWorker::new(
-            configuration,
-            worker_backend_factory,
-            counter,
-            profile,
-            origins,
-        )
-        .run(worker_id);
+    ) -> Result<Self::Handler, anyhow::Error> {
+        let (sender, canceler) =
+            CrawlWorker::new(&*configuration, worker_backend_factory, counter, profile)
+                .run(worker_id);
 
-        LocalHandler { sender, canceler }
+        Ok(LocalHandler { sender, canceler })
     }
 }
 
@@ -168,8 +167,7 @@ pub struct CrawlWorker {
     task_counter: Arc<Counter>,
     profile: Arc<Profile>,
     worker_backend_factory: Arc<dyn WorkerBackendFactory>,
-    origins: Arc<Origins>,
-    request_timeout: f64,
+    parameters: Parameters,
 }
 
 impl CrawlWorker {
@@ -178,8 +176,8 @@ impl CrawlWorker {
         worker_backend_factory: Arc<dyn WorkerBackendFactory>,
         task_counter: Arc<Counter>,
         profile: Arc<Profile>,
-        origins: Arc<Origins>,
     ) -> CrawlWorker {
+        let parameters = configuration.parameters();
         CrawlWorker {
             downloader: configuration.downloader(),
             task_counter,
@@ -187,15 +185,18 @@ impl CrawlWorker {
             parser: configuration.parser(),
             boundaries: configuration.boundaries(),
             worker_backend_factory,
-            origins,
-            request_timeout: configuration.parameters().request_timeout,
+            parameters,
         }
+    }
+
+    fn origins(&self) -> Origins {
+        Origins::new(self.parameters.max_hits_per_sec)
     }
 
     async fn crawl(&self, page_url: &Url) -> Crawled {
         // Now, download, but be quick.
         let crawl = time::timeout(
-            Duration::from_secs_f64(self.request_timeout),
+            Duration::from_secs_f64(self.parameters.request_timeout),
             self.downloader.download(page_url),
         );
 
@@ -300,13 +301,13 @@ impl CrawlWorker {
 
     pub async fn crawl_task(
         &self,
+        origins: &Origins,
         worker_backend: &dyn WorkerBackend,
         page_url: &Url,
         depth: u16,
     ) -> Result<(), anyhow::Error> {
         // Get origin:
-        let origin = self
-            .origins
+        let origin = origins
             .get_origin_for_url(&*self.downloader, &page_url)
             .await;
 
@@ -335,6 +336,9 @@ impl CrawlWorker {
         let canceler = spawn_onto_thread(format!("lpz-wrk-{}", worker_id), move || async move {
             log::info!("worker started");
 
+            // Have to create here because is not Send:
+            let origins = self.origins();
+
             // Spawn all connections:
             let worker_backends = future::join_all(
                 (0..self.profile.backends_per_worker)
@@ -350,6 +354,7 @@ impl CrawlWorker {
             // You risk making the master never finish and that is Big Trouble (tm).
             let worker_backends = &worker_backends;
             let worker_ref = &self; // apeasses borrow checker.
+            let origins_ref = &origins; // apeasses borrow checker.
             url_stream
                 .enumerate()
                 .for_each_concurrent(
@@ -361,6 +366,7 @@ impl CrawlWorker {
                         // Run the task:
                         let result = worker_ref
                             .crawl_task(
+                                origins_ref,
                                 &*worker_backends[i % worker_backends.len()],
                                 &page_url,
                                 depth,
@@ -399,7 +405,7 @@ impl CrawlWorker {
 
         // Get origin:
         let origin = self
-            .origins
+            .origins()
             .get_origin_for_url(&*self.downloader, &actual_url)
             .await;
 

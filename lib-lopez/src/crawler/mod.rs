@@ -4,23 +4,24 @@ mod boundaries;
 mod counter;
 mod downloader;
 mod master;
-mod origins;
 mod parser;
 mod reason;
 mod robots;
-mod server;
 mod worker;
 
 pub use self::boundaries::{Boundaries, DummyBoundaries};
 pub use self::counter::Counter;
 pub use self::downloader::{Downloader, DummyDownloader, SimpleDownloader};
 pub use self::master::CrawlMaster;
-pub use self::origins::Origins;
 pub use self::parser::{DummyParser, Parsed, Parser};
 pub use self::reason::Reason;
 pub use self::worker::LocalHandlerFactory;
-pub(crate) use self::worker::{CrawlWorker, Crawled, ReportType, TestRunReport, WorkerId};
+pub(crate) use self::worker::{
+    CrawlWorker, Crawled, LocalHandler, ReportType, TestRunReport, WorkerHandler,
+    WorkerHandlerFactory, WorkerId,
+};
 
+use serde_derive::{Deserialize, Serialize};
 use std::fmt::Debug;
 use url::Url;
 
@@ -35,7 +36,8 @@ pub struct Parameters {
     pub enable_page_rank: bool,
 }
 
-pub trait Configuration: Debug {
+#[typetag::serde(tag = "type")]
+pub trait Configuration: Debug + Send + Sync {
     fn downloader(&self) -> Box<dyn Downloader>;
     fn parser(&self) -> Box<dyn Parser>;
     fn boundaries(&self) -> Box<dyn Boundaries>;
@@ -44,9 +46,10 @@ pub trait Configuration: Debug {
     fn parameters(&self) -> Parameters;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DummyConfiguration;
 
+#[typetag::serde]
 impl Configuration for DummyConfiguration {
     fn downloader(&self) -> Box<dyn Downloader> {
         Box::new(DummyDownloader)

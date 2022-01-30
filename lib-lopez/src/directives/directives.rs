@@ -1,5 +1,6 @@
 use regex::RegexSet;
 use scraper::Html;
+use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
@@ -92,13 +93,13 @@ fn full_rule_name(prefix: &str, rule_name: &str) -> String {
 }
 
 /// Directives for Lopez.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Directives {
     modules: BTreeMap<String, Module>,
 }
 
 /// A module of directives.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Module {
     items: Vec<Item>,
 }

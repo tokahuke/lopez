@@ -17,7 +17,7 @@ impl PostgresPageRanker {
     pub(super) async fn init(
         client: Rc<Client>,
         wave_id: i32,
-    ) -> Result<PostgresPageRanker, crate::Error> {
+    ) -> Result<PostgresPageRanker, anyhow::Error> {
         // Prepare statements:
         let linkage = client.prepare(LINKAGE).await?;
         let ensure_page_rank = client.prepare(ENSURE_PAGE_RANK).await?;
@@ -33,12 +33,11 @@ impl PostgresPageRanker {
 
 #[async_trait(?Send)]
 impl PageRanker for PostgresPageRanker {
-    type Error = crate::Error;
     type PageId = i64;
 
     async fn linkage(
         &mut self,
-    ) -> Result<Box<dyn Iterator<Item = (Self::PageId, Self::PageId)>>, crate::Error> {
+    ) -> Result<Box<dyn Iterator<Item = (Self::PageId, Self::PageId)>>, anyhow::Error> {
         // Create a stream of links:
         let edges = self
             .client
@@ -58,7 +57,7 @@ impl PageRanker for PostgresPageRanker {
     async fn push_page_ranks(
         &mut self,
         ranked: &[(Self::PageId, f64)],
-    ) -> Result<(), crate::Error> {
+    ) -> Result<(), anyhow::Error> {
         let (page_batch, rank_batch): (Vec<_>, Vec<_>) = ranked.iter().cloned().unzip();
         let params = params![&self.wave_id, page_batch, rank_batch];
         self.client.execute(&self.ensure_page_rank, params).await?;

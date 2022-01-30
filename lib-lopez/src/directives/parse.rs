@@ -9,6 +9,8 @@ use nom::{
     IResult,
 };
 use regex::Regex;
+use serde_derive::{Deserialize, Serialize};
+use serde_with::DisplayFromStr;
 use std::collections::HashMap;
 use std::sync::Arc;
 use url::Url;
@@ -21,7 +23,7 @@ use super::expressions::Parseable;
 use super::expressions::*;
 use super::parse_common::*;
 use super::parse_utils::ParseError;
-use super::{Extractor, Value};
+use super::{Extractor, Selector, Value};
 
 fn identifier(i: &str) -> IResult<&str, &str> {
     is_not("\\/:;.()[]{}\'\" \n\t\r\0")(i)
@@ -87,9 +89,7 @@ fn block_test() {
     );
 }
 
-fn css_selector(
-    boundary_hint: char,
-) -> impl Fn(&str) -> IResult<&str, Result<scraper::Selector, String>> {
+fn css_selector(boundary_hint: char) -> impl Fn(&str) -> IResult<&str, Result<Selector, String>> {
     move |i: &str| {
         let mut level = 0;
         let mut idx = 0;
@@ -112,7 +112,7 @@ fn css_selector(
         } else {
             Ok((
                 &i[idx..],
-                scraper::Selector::parse(&i[..idx]).map_err(|err| format!("{:?}", err)),
+                i[..idx].parse().map_err(|err| format!("{:?}", err)),
             ))
         }
     }
@@ -120,7 +120,7 @@ fn css_selector(
 
 #[test]
 fn css_selector_test() {
-    let selector = scraper::Selector::parse("div > a + button[foo$=\"bar{\" i]").unwrap();
+    let selector = "div > a + button[foo$=\"bar{\" i]".parse().unwrap();
     assert_eq!(
         css_selector('{')("div > a + button[foo$=\"bar{\" i]{ haha-hoho!"),
         Ok(("{ haha-hoho!", Ok(selector)))
@@ -211,7 +211,7 @@ fn extractor_test() {
                         transformers: vec![Transformer::Pretty].into_boxed_slice(),
                     },
                 }),
-                scraper::Selector::parse("li").unwrap()
+                "li".parse().unwrap()
             ),)
         ))
     );
@@ -364,10 +364,13 @@ fn flag_directive_test() {
     assert_eq!(flag_directive(&["foo"])("foo;"), Ok(("", ())));
 }
 
-#[derive(Debug)]
+#[serde_with::serde_as]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RuleSet {
+    #[serde(with = "serde_regex")]
     pub in_page: Option<Regex>,
-    pub selector: scraper::Selector,
+    #[serde_as(as = "DisplayFromStr")]
+    pub selector: Selector,
     pub aggregators: HashMap<String, AggregatorExpression<Extractor>>,
 }
 
@@ -417,7 +420,7 @@ fn rule_set_test() {
         .unwrap();
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Module {
     pub path: String,
 }
@@ -453,11 +456,11 @@ fn seed_test() {
     )
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Boundary {
-    Allowed(Regex),
-    Disallowed(Regex),
-    Frontier(Regex),
+    Allowed(#[serde(with = "serde_regex")] Regex),
+    Disallowed(#[serde(with = "serde_regex")] Regex),
+    Frontier(#[serde(with = "serde_regex")] Regex),
     UseParam(String),
     IgnoreParam(String),
     UseAllParams,
@@ -562,7 +565,7 @@ fn literal_test() {
     assert_eq!(literal("1234.0"), Ok(("", (1234.0).into())));
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct SetVariable {
     pub name: String,
     pub value: Value,
@@ -618,7 +621,7 @@ fn set_variable_test() {
     );
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum Item {
     Seed(Url),

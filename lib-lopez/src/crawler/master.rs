@@ -1,3 +1,4 @@
+use futures::prelude::*;
 use std::sync::Arc;
 use tokio::time::{self, Duration};
 use url::Url;
@@ -6,12 +7,11 @@ use crate::backend::{Backend, PageRanker, WorkerBackendFactory};
 use crate::cli::Profile;
 
 use super::counter::log_stats;
-use super::origins::Origins;
 use super::worker::{WorkerHandler, WorkerHandlerFactory, WorkerId};
 use super::{Configuration, Counter, CrawlWorker, TestRunReport};
 
 pub struct CrawlMaster<B, WHF> {
-    configuration: Box<dyn Configuration>,
+    configuration: Arc<dyn Configuration>,
     backend: B,
     worker_handler_factory: WHF,
 }
@@ -27,7 +27,7 @@ where
         worker_handler_factory: WHF,
     ) -> Self {
         CrawlMaster {
-            configuration: Box::new(configuration),
+            configuration: Arc::new(configuration),
             backend,
             worker_handler_factory,
         }
@@ -38,9 +38,6 @@ where
         crate::panic::log_panics();
 
         let parameters = self.configuration.parameters();
-
-        // Set global (transient) information on origins:
-        let origins = Arc::new(Origins::new(parameters.max_hits_per_sec));
 
         // Load data model:
         let mut master_model = self.backend.build_master().await?;
@@ -70,20 +67,22 @@ where
 
         let crawl_profile = &profile;
         let crawl_counter = &counter;
-        let crawl_configuration = &*self.configuration;
+        let crawl_configuration = &self.configuration;
         let worker_handler_factory = &self.worker_handler_factory;
-        let mut handlers = (0..profile.workers)
-            .map(move |worker_id| {
+        let mut handlers = futures::stream::iter(0..profile.workers)
+            .then(move |worker_id| {
                 worker_handler_factory.build(
-                    crawl_configuration,
+                    crawl_configuration.clone(),
                     worker_backend_factory.clone(),
                     crawl_profile.clone(),
                     crawl_counter.clone(),
-                    origins.clone(),
                     worker_id as WorkerId,
                 )
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
 
         // Ensure that the search was started:
         let seeds = self.configuration.seeds();
@@ -215,10 +214,6 @@ where
 
     /// Tests a URL and says what is happening.
     pub async fn test_url(mut self, profile: Arc<Profile>, url: Url) -> TestRunReport {
-        let parameters = self.configuration.parameters();
-        // Set global (transient) information on origins:
-        let origins = Arc::new(Origins::new(parameters.max_hits_per_sec));
-
         // Load dummy data model:
         let mut master_model = self
             .backend
@@ -238,7 +233,6 @@ where
             worker_backend_factory,
             counter,
             profile,
-            origins,
         )
         .test_url(url)
         .await

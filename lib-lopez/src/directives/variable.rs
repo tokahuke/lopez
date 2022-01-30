@@ -1,3 +1,4 @@
+use serde_derive::{Deserialize, Serialize};
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -14,7 +15,7 @@ pub fn force_f64(num: &Number) -> f64 {
 // create a relation of default values and default ways of retrieving Rust
 // values from JSON.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Variable {
     UserAgent,
     Quota,
@@ -140,7 +141,7 @@ impl Variable {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetVariables {
     pub(super) set_variables: BTreeMap<Variable, Value>,
 }

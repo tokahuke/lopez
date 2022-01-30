@@ -1,12 +1,16 @@
 use scraper::ElementRef;
+use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use serde_with::{serde_as, DisplayFromStr};
 use std::fmt;
 
 use crate::Type;
 
 use super::expressions::{Error, Extractable, ExtractorExpression, Typed};
+use super::Selector;
 
-#[derive(Debug, PartialEq)]
+#[serde_as]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Extractor {
     Name,
     Text,
@@ -18,8 +22,14 @@ pub enum Extractor {
     Id,
     Parent(Box<ExtractorExpression<Self>>),
     Children(Box<ExtractorExpression<Self>>),
-    SelectAny(Box<ExtractorExpression<Self>>, scraper::Selector),
-    SelectAll(Box<ExtractorExpression<Self>>, scraper::Selector),
+    SelectAny(
+        Box<ExtractorExpression<Self>>,
+        #[serde_as(as = "DisplayFromStr")] Selector,
+    ),
+    SelectAll(
+        Box<ExtractorExpression<Self>>,
+        #[serde_as(as = "DisplayFromStr")] Selector,
+    ),
 }
 
 impl fmt::Display for Extractor {

@@ -1,6 +1,7 @@
 #[macro_export]
 macro_rules! cli_impl {
     ($backend_ty:ty) => {
+        use std::net::SocketAddr;
         use std::path::PathBuf;
 
         use $crate::backend::Backend;
@@ -35,6 +36,17 @@ macro_rules! cli_impl {
                 profile: Profile,
                 #[structopt(flatten)]
                 config: <$backend_ty as Backend>::Config,
+                #[structopt(subcommand)]
+                mode: Option<$crate::Mode>,
+            },
+            /// Runs a server for external crawls to spawn workers into.
+            Serve {
+                #[structopt(env)]
+                bind: SocketAddr,
+                #[structopt(long, env)]
+                token: String,
+                #[structopt(long, default_value = "128", env)]
+                max_connections: usize,
             },
             /// Validates a given crawl configuration.
             Validate {
@@ -75,10 +87,12 @@ macro_rules! cli_impl {
     };
 }
 
+use serde_derive::{Deserialize, Serialize};
+use std::net::SocketAddr;
 use structopt::StructOpt;
 
 /// See `Default` implementation for default values on fields.
-#[derive(Debug, Clone, StructOpt)]
+#[derive(Debug, Clone, StructOpt, Serialize, Deserialize)]
 pub struct Profile {
     /// The number of worker units to be run. Each worker runs in its own
     /// thread. Just raise this if one worker is already consuming 100% CPU,
@@ -119,5 +133,24 @@ impl Default for Profile {
             batch_size: 1024,
             max_quota: None,
         }
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub enum Mode {
+    Local,
+    Cluster {
+        #[structopt(long, multiple = true, env)]
+        pool: Vec<SocketAddr>,
+        #[structopt(long, default_value = "5", env)]
+        max_retries: usize,
+        #[structopt(long, env)]
+        token: String,
+    },
+}
+
+impl Default for Mode {
+    fn default() -> Self {
+        Mode::Local
     }
 }

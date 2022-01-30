@@ -6,6 +6,8 @@ pub use serde_json::Value;
 pub use structopt::StructOpt;
 pub use url::Url;
 
+pub use typetag;
+
 pub use crate::crawler::Reason;
 pub use crate::Type;
 
@@ -72,6 +74,7 @@ pub trait MasterBackend {
     ) -> Result<Vec<(Url, u16)>, anyhow::Error>;
 }
 
+#[typetag::serde(tag = "type")]
 #[async_trait(?Send)]
 pub trait WorkerBackendFactory: 'static + Send + Sync + Debug {
     async fn build(&self) -> Result<Box<dyn WorkerBackend>, anyhow::Error>;

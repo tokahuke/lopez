@@ -1,4 +1,5 @@
 use super::*;
+use serde_derive::{Deserialize, Serialize};
 
 /// A backend implementation which is actually not a backend at all and will
 /// panic if used.
@@ -6,7 +7,9 @@ use super::*;
 pub struct DummyBackend;
 #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DummyMasterBackend;
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 pub struct DummyWorkerBackendFactory;
 #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DummyWorkerBackend;
@@ -72,6 +75,7 @@ impl MasterBackend for DummyMasterBackend {
     }
 }
 
+#[typetag::serde]
 #[async_trait(?Send)]
 impl WorkerBackendFactory for DummyWorkerBackendFactory {
     async fn build(&self) -> Result<Box<dyn WorkerBackend>, anyhow::Error> {
